@@ -17,9 +17,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://greenpulse-oeuz8ykak-green-pulse3.vercel.app",
-    ],
+allow_origins=[
+    "https://greenpulse-geugcb08d-green-pulse3.vercel.app",
+],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -114,18 +114,20 @@ def init_db():
         )
         """
     )
+
     for column, definition in [
-    ("points", "INTEGER NOT NULL DEFAULT 0"),
-    ("streak", "INTEGER NOT NULL DEFAULT 0"),
-    ("level", "INTEGER NOT NULL DEFAULT 1"),
-    ("forest_actions", "INTEGER NOT NULL DEFAULT 0"),
-]:
-    try:
-        connection.execute(
-            f"ALTER TABLE users ADD COLUMN {column} {definition}"
-        )
-    except sqlite3.OperationalError:
-        pass
+        ("points", "INTEGER NOT NULL DEFAULT 0"),
+        ("streak", "INTEGER NOT NULL DEFAULT 0"),
+        ("level", "INTEGER NOT NULL DEFAULT 1"),
+        ("forest_actions", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        try:
+            connection.execute(
+                f"ALTER TABLE users ADD COLUMN {column} {definition}"
+            )
+        except sqlite3.OperationalError:
+            pass
+
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -162,7 +164,6 @@ def init_db():
 
     connection.commit()
     connection.close()
-
 
 init_db()
 
@@ -532,14 +533,6 @@ def delete_review(
         """,
         (review_id,),
     )
-
-    connection.commit()
-    connection.close()
-
-    return {
-        "message": "Review deleted successfully"
-    }
-
 @app.get("/api/dashboard")
 def dashboard(token: str):
     user = get_current_user(token)
@@ -569,3 +562,11 @@ def dashboard(token: str):
         "level": stats["level"],
         "forest_actions": stats["forest_actions"],
     }
+
+    connection.commit()
+    connection.close()
+
+    return {
+        "message": "Review deleted successfully"
+    }
+
