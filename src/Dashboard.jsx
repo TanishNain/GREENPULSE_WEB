@@ -1,62 +1,42 @@
 import { useEffect, useState } from "react";
-import "./Dashboard.css";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { getToken, getUser, logout } from "./auth.js";
 
-const API_URL = "https://greenpulse-web-tc0g.onrender.com";
-
 function Dashboard() {
-  const navigate = useNavigate();
-  const localUser = getUser();
+  const user = getUser();
 
-  const [user, setUser] = useState(localUser);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+  points: 0,
+  streak: 0,
+  level: 1,
+  forest_actions: 0,
+});
 
-  useEffect(() => {
-    const token = getToken();
+useEffect(() => {
+  const token = getToken();
 
-    if (!token) {
-      navigate("/auth");
-      return;
-    }
-
-    async function verifySession() {
-      try {
-        const response = await fetch(
-          `${API_URL}/api/auth/me?token=${encodeURIComponent(token)}`
-        );
-
-        if (!response.ok) {
-          throw new Error("Session invalid");
-        }
-
-        const data = await response.json();
-
-        setUser(data.user);
-
-        localStorage.setItem(
-          "greenpulse_user",
-          JSON.stringify(data.user)
-        );
-      } catch {
-        logout();
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    verifySession();
-  }, [navigate]);
-
-  if (loading) {
-    return (
-      <main className="dashboard-page">
-        <div className="dashboard-loading">
-          Verifying your GREEN PULSE session...
-        </div>
-      </main>
-    );
+  if (!token) {
+    logout();
+    return;
   }
+
+  fetch(
+    `https://greenpulse-web-tc0g.onrender.com/api/dashboard?token=${encodeURIComponent(token)}`
+  )
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Failed to load dashboard");
+      }
+
+      return response.json();
+    })
+    .then((data) => {
+      setStats(data);
+    })
+    .catch((error) => {
+      console.error("Dashboard error:", error);
+    });
+}, []);
 
   return (
     <main className="dashboard-page">
@@ -97,7 +77,7 @@ function Dashboard() {
 
         <div className="dashboard-impact">
           <span>YOUR IMPACT</span>
-          <strong>72</strong>
+          <strong>{stats.points}</strong>
           <small>points</small>
         </div>
       </section>
@@ -105,25 +85,25 @@ function Dashboard() {
       <section className="dashboard-stats">
         <article>
           <span>🔥 STREAK</span>
-          <strong>7</strong>
+          <strong>{stats.streak}</strong>
           <small>days</small>
         </article>
 
         <article>
           <span>⭐ POINTS</span>
-          <strong>240</strong>
+          <strong>{stats.points}</strong>
           <small>earned</small>
         </article>
 
         <article>
           <span>🌱 LEVEL</span>
-          <strong>4</strong>
+          <strong>{stats.level}</strong>
           <small>Growing</small>
         </article>
 
         <article>
           <span>🌳 FOREST</span>
-          <strong>12</strong>
+          <strong>{stats.forest_actions}</strong>
           <small>actions</small>
         </article>
       </section>

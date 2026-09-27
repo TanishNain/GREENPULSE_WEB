@@ -114,6 +114,18 @@ def init_db():
         )
         """
     )
+    for column, definition in [
+    ("points", "INTEGER NOT NULL DEFAULT 0"),
+    ("streak", "INTEGER NOT NULL DEFAULT 0"),
+    ("level", "INTEGER NOT NULL DEFAULT 1"),
+    ("forest_actions", "INTEGER NOT NULL DEFAULT 0"),
+]:
+    try:
+        connection.execute(
+            f"ALTER TABLE users ADD COLUMN {column} {definition}"
+        )
+    except sqlite3.OperationalError:
+        pass
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -526,4 +538,34 @@ def delete_review(
 
     return {
         "message": "Review deleted successfully"
+    }
+
+@app.get("/api/dashboard")
+def dashboard(token: str):
+    user = get_current_user(token)
+
+    connection = get_db()
+
+    stats = connection.execute(
+        """
+        SELECT
+            username,
+            points,
+            streak,
+            level,
+            forest_actions
+        FROM users
+        WHERE id = ?
+        """,
+        (user["id"],),
+    ).fetchone()
+
+    connection.close()
+
+    return {
+        "username": stats["username"],
+        "points": stats["points"],
+        "streak": stats["streak"],
+        "level": stats["level"],
+        "forest_actions": stats["forest_actions"],
     }
