@@ -1,0 +1,804 @@
+.explore-page {
+  min-height: 100vh;
+  background: #07110c;
+  color: #f3f8f1;
+  overflow: hidden;
+}
+
+.explore-page * {
+  box-sizing: border-box;
+}
+
+.explore-page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* NAVBAR */
+
+.explore-navbar {
+  width: min(1250px, calc(100% - 48px));
+  height: 86px;
+  margin: auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.explore-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  letter-spacing: 1.8px;
+}
+
+.explore-logo span {
+  font-size: 23px;
+}
+
+.explore-logo strong span {
+  color: #9cff72;
+}
+
+.back-home {
+  color: #91a097;
+  font-size: 13px;
+  transition: 0.25s ease;
+}
+
+.back-home:hover {
+  color: #9cff72;
+}
+
+/* HERO */
+
+.explore-hero {
+  width: min(1250px, calc(100% - 48px));
+  min-height: 680px;
+  margin: auto;
+
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  align-items: center;
+  gap: 40px;
+}
+
+.explore-eyebrow,
+.explore-label {
+  display: block;
+  color: #9cff72;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+}
+
+.explore-hero h1 {
+  max-width: 850px;
+  margin: 25px 0;
+
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(48px, 6vw, 82px);
+  line-height: 0.98;
+  letter-spacing: -4px;
+}
+
+.explore-hero h1 span,
+.section-intro h2 span,
+.philosophy-content h2 span,
+.reviews-cta h2 span,
+.explore-final h2 span {
+  color: #9cff72;
+}
+
+.explore-hero-content > p {
+  max-width: 600px;
+  color: #91a097;
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+
+  margin-top: 32px;
+  padding: 11px 15px;
+
+  border: 1px solid rgba(156, 255, 114, 0.18);
+  border-radius: 100px;
+
+  color: #b7c3bb;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+}
+
+.version-pill span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9cff72;
+  box-shadow: 0 0 15px rgba(156, 255, 114, 0.8);
+}
+
+/* HERO ORBIT */
+
+.explore-hero-orbit {
+  position: relative;
+  width: 430px;
+  height: 430px;
+  margin: auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orbit-ring {
+  position: absolute;
+  border: 1px solid rgba(156, 255, 114, 0.12);
+  border-radius: 50%;
+}
+
+.orbit-one {
+  width: 310px;
+  height: 310px;
+}
+
+.orbit-two {
+  width: 430px;
+  height: 430px;
+  border-style: dashed;
+}
+
+.orbit-core {
+  position: relative;
+  width: 190px;
+  height: 190px;
+
+  border: 1px solid rgba(156, 255, 114, 0.25);
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 0 70px rgba(89, 190, 75, 0.12),
+    inset 0 0 40px rgba(255, 255, 255, 0.03);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.orbit-core span {
+  font-size: 25px;
+}
+
+.orbit-core strong {
+  margin-top: 4px;
+  font-family: "Manrope", sans-serif;
+  font-size: 54px;
+}
+
+.orbit-core small {
+  color: #91a097;
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+
+/* COMMON */
+
+.explore-section {
+  width: min(1250px, calc(100% - 48px));
+  margin: auto;
+  padding: 130px 0;
+}
+
+.section-intro {
+  max-width: 760px;
+}
+
+.section-intro.center {
+  margin: auto;
+  text-align: center;
+}
+
+.section-intro h2,
+.philosophy-content h2 {
+  margin: 20px 0;
+
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(40px, 5vw, 65px);
+  line-height: 1;
+  letter-spacing: -3px;
+}
+
+.section-intro p {
+  max-width: 650px;
+  color: #91a097;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+/* CAPABILITIES */
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+
+  margin-top: 70px;
+}
+
+.capability-card {
+  position: relative;
+  min-height: 310px;
+  padding: 30px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+
+  background: rgba(255, 255, 255, 0.035);
+
+  transition:
+    transform 0.3s ease,
+    border-color 0.3s ease,
+    background 0.3s ease;
+}
+
+.capability-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(156, 255, 114, 0.22);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.capability-card.featured {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(156, 255, 114, 0.09),
+      rgba(255, 255, 255, 0.025)
+    );
+}
+
+.capability-number {
+  position: absolute;
+  top: 27px;
+  right: 28px;
+
+  color: #58645c;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.capability-icon {
+  margin-top: 25px;
+  font-size: 28px;
+}
+
+.capability-card h3 {
+  margin-top: 28px;
+
+  font-family: "Manrope", sans-serif;
+  font-size: 22px;
+}
+
+.capability-card p {
+  margin-top: 12px;
+
+  color: #91a097;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.capability-tag {
+  position: absolute;
+  bottom: 27px;
+  left: 30px;
+
+  color: #708077;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+}
+
+/* PHILOSOPHY */
+
+.philosophy-section {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr;
+  gap: 100px;
+  align-items: center;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.philosophy-content > p {
+  max-width: 610px;
+  margin-top: 18px;
+
+  color: #91a097;
+  line-height: 1.7;
+}
+
+.philosophy-quote {
+  display: flex;
+  gap: 18px;
+  margin-top: 40px;
+  padding-left: 20px;
+  border-left: 2px solid #9cff72;
+}
+
+.philosophy-quote > span {
+  color: #9cff72;
+  font-family: Georgia, serif;
+  font-size: 45px;
+  line-height: 0.7;
+}
+
+.philosophy-quote strong {
+  font-family: "Manrope", sans-serif;
+  font-size: 19px;
+  line-height: 1.5;
+}
+
+.philosophy-visual {
+  padding: 25px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.visual-step {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px;
+
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 13px;
+}
+
+.visual-step > span {
+  color: #657169;
+  font-size: 11px;
+}
+
+.visual-step strong {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 1.4px;
+}
+
+.visual-step small {
+  display: block;
+  margin-top: 5px;
+  color: #7d8b82;
+}
+
+.visual-step.active {
+  border-color: rgba(156, 255, 114, 0.25);
+  background: rgba(156, 255, 114, 0.055);
+}
+
+.visual-step.active > span {
+  color: #9cff72;
+}
+
+.visual-arrow {
+  padding: 9px 0;
+  text-align: center;
+  color: #526057;
+}
+
+/* TREE */
+
+.growth-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.tree-roadmap {
+  position: relative;
+
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 25px;
+
+  margin-top: 90px;
+}
+
+.tree-line {
+  position: absolute;
+  top: 42px;
+  left: 9%;
+  right: 9%;
+  height: 1px;
+
+  background: linear-gradient(
+    90deg,
+    rgba(156, 255, 114, 0.12),
+    rgba(156, 255, 114, 0.4),
+    rgba(156, 255, 114, 0.12)
+  );
+}
+
+.tree-stage {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.tree-node {
+  width: 84px;
+  height: 84px;
+  margin: auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(156, 255, 114, 0.2);
+  border-radius: 50%;
+
+  background: #07110c;
+  font-size: 32px;
+
+  box-shadow: 0 0 35px rgba(156, 255, 114, 0.07);
+}
+
+.tree-stage > span {
+  display: block;
+  margin-top: 22px;
+
+  color: #9cff72;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.tree-stage h3 {
+  margin-top: 9px;
+  font-family: "Manrope", sans-serif;
+  font-size: 22px;
+}
+
+.tree-stage p {
+  max-width: 220px;
+  margin: 10px auto;
+
+  color: #7f8d84;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* FUTURE */
+
+.future-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.future-list {
+  margin-top: 70px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.future-item {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 25px;
+  align-items: center;
+
+  padding: 28px 5px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.future-item > span {
+  color: #59655e;
+  font-size: 11px;
+}
+
+.future-item h3 {
+  font-family: "Manrope", sans-serif;
+  font-size: 19px;
+}
+
+.future-item p {
+  max-width: 700px;
+  margin-top: 7px;
+
+  color: #7f8d84;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.future-item b {
+  padding: 7px 10px;
+
+  border: 1px solid rgba(156, 255, 114, 0.15);
+  border-radius: 100px;
+
+  color: #81947f;
+  font-size: 8px;
+  letter-spacing: 1.4px;
+  white-space: nowrap;
+}
+
+/* REVIEWS CTA */
+
+.reviews-cta {
+  width: min(1250px, calc(100% - 48px));
+  margin: 30px auto 0;
+  padding: 70px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+
+  border: 1px solid rgba(156, 255, 114, 0.13);
+  border-radius: 24px;
+
+  background:
+    radial-gradient(
+      circle at 85% 50%,
+      rgba(156, 255, 114, 0.08),
+      transparent 35%
+    ),
+    rgba(255, 255, 255, 0.025);
+}
+
+.reviews-cta h2 {
+  margin-top: 17px;
+
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(38px, 5vw, 60px);
+  line-height: 1;
+  letter-spacing: -3px;
+}
+
+.reviews-cta p {
+  max-width: 500px;
+  margin-top: 18px;
+
+  color: #91a097;
+  line-height: 1.7;
+}
+
+.review-button,
+.explore-home-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+
+  padding: 15px 19px;
+
+  border-radius: 10px;
+
+  background: #9cff72;
+  color: #07110c !important;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  transition: transform 0.25s ease;
+}
+
+.review-button:hover,
+.explore-home-button:hover {
+  transform: translateY(-3px);
+}
+
+.review-button span,
+.explore-home-button span {
+  font-size: 18px;
+}
+
+/* FINAL */
+
+.explore-final {
+  padding: 180px 24px 120px;
+  text-align: center;
+}
+
+.final-leaf {
+  font-size: 34px;
+}
+
+.explore-final h2 {
+  margin-top: 25px;
+
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(55px, 8vw, 105px);
+  line-height: 0.92;
+  letter-spacing: -5px;
+}
+
+.explore-final p {
+  margin-top: 25px;
+  color: #91a097;
+  line-height: 1.7;
+}
+
+.explore-home-button {
+  margin-top: 30px;
+}
+
+/* FOOTER */
+
+.explore-footer {
+  width: min(1250px, calc(100% - 48px));
+  margin: auto;
+  padding: 30px 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  color: #69766e;
+  font-size: 11px;
+}
+
+.footer-brand {
+  color: #e9f2e7;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.footer-brand span {
+  margin-right: 8px;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 950px) {
+  .explore-hero {
+    grid-template-columns: 1fr;
+    padding: 90px 0;
+  }
+
+  .explore-hero-orbit {
+    width: 350px;
+    height: 350px;
+  }
+
+  .orbit-two {
+    width: 350px;
+    height: 350px;
+  }
+
+  .capability-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .philosophy-section {
+    grid-template-columns: 1fr;
+    gap: 60px;
+  }
+
+  .tree-roadmap {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 60px 20px;
+  }
+
+  .tree-line {
+    display: none;
+  }
+
+  .reviews-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 650px) {
+  .explore-navbar {
+    width: calc(100% - 32px);
+    height: 70px;
+  }
+
+  .back-home {
+    font-size: 11px;
+  }
+
+  .explore-section {
+    width: calc(100% - 32px);
+    padding: 90px 0;
+  }
+
+  .explore-hero {
+    width: calc(100% - 32px);
+    min-height: auto;
+    padding: 80px 0;
+  }
+
+  .explore-hero h1 {
+    font-size: 48px;
+    letter-spacing: -2.5px;
+  }
+
+  .explore-hero-content > p {
+    font-size: 16px;
+  }
+
+  .explore-hero-orbit {
+    width: 280px;
+    height: 280px;
+  }
+
+  .orbit-one {
+    width: 210px;
+    height: 210px;
+  }
+
+  .orbit-two {
+    width: 280px;
+    height: 280px;
+  }
+
+  .orbit-core {
+    width: 145px;
+    height: 145px;
+  }
+
+  .orbit-core strong {
+    font-size: 42px;
+  }
+
+  .capability-grid {
+    grid-template-columns: 1fr;
+    margin-top: 50px;
+  }
+
+  .capability-card {
+    min-height: 280px;
+  }
+
+  .section-intro h2,
+  .philosophy-content h2 {
+    font-size: 43px;
+    letter-spacing: -2px;
+  }
+
+  .tree-roadmap {
+    grid-template-columns: 1fr;
+  }
+
+  .reviews-cta {
+    width: calc(100% - 32px);
+    padding: 40px 25px;
+  }
+
+  .future-item {
+    grid-template-columns: 35px 1fr;
+    gap: 15px;
+  }
+
+  .future-item b {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .explore-final {
+    padding: 130px 20px 90px;
+  }
+
+  .explore-final h2 {
+    font-size: 62px;
+    letter-spacing: -3px;
+  }
+
+  .explore-footer {
+    width: calc(100% - 32px);
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
