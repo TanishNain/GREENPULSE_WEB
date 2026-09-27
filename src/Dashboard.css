@@ -265,3 +265,11 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+.dashboard-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: #9cff72;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}

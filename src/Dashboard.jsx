@@ -1,9 +1,62 @@
+import { useEffect, useState } from "react";
 import "./Dashboard.css";
-import { Link } from "react-router-dom";
-import { getUser, logout } from "./auth.js";
+import { Link, useNavigate } from "react-router-dom";
+import { getToken, getUser, logout } from "./auth.js";
+
+const API_URL = "https://greenpulse-web-tc0g.onrender.com";
 
 function Dashboard() {
-  const user = getUser();
+  const navigate = useNavigate();
+  const localUser = getUser();
+
+  const [user, setUser] = useState(localUser);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = getToken();
+
+    if (!token) {
+      navigate("/auth");
+      return;
+    }
+
+    async function verifySession() {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/auth/me?token=${encodeURIComponent(token)}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Session invalid");
+        }
+
+        const data = await response.json();
+
+        setUser(data.user);
+
+        localStorage.setItem(
+          "greenpulse_user",
+          JSON.stringify(data.user)
+        );
+      } catch {
+        logout();
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    verifySession();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <main className="dashboard-page">
+        <div className="dashboard-loading">
+          Verifying your GREEN PULSE session...
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="dashboard-page">
