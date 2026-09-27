@@ -38,5 +38,6 @@ env/
 # GreenPulse Python virtual environment
 backend/venv/*
 !backend/venv/main.py
+!backend/venv/requirements.txt
 
 desktop.ini
