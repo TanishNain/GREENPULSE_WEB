@@ -50,23 +50,40 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 print("DATABASE_URL PRESENT:", bool(DATABASE_URL))
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SQLITE_DB = os.path.join(BASE_DIR, "greenpulse.db")
+
+SQLITE_DB = os.path.join(
+    BASE_DIR,
+    "greenpulse.db",
+)
 
 
 class PostgresConnection:
-    # Small compatibility wrapper so existing SQLite-style
-    # SQL can continue using ? placeholders with PostgreSQL.
+    """
+    Small compatibility wrapper.
+
+    Existing GreenPulse code uses SQLite-style ? placeholders.
+    PostgreSQL uses %s placeholders.
+
+    This wrapper converts ? into %s automatically so the same
+    backend logic can work with both databases.
+    """
 
     def __init__(self, connection):
         self.connection = connection
 
     def execute(self, query, params=()):
         query = query.replace("?", "%s")
-        return self.connection.execute(query, params)
+        return self.connection.execute(
+            query,
+            params,
+        )
 
     def executemany(self, query, params_list):
         query = query.replace("?", "%s")
-        return self.connection.executemany(query, params_list)
+        return self.connection.executemany(
+            query,
+            params_list,
+        )
 
     def commit(self):
         self.connection.commit()
@@ -79,15 +96,21 @@ class PostgresConnection:
 
 
 def get_db():
-    # Supabase PostgreSQL is PRIMARY whenever DATABASE_URL exists.
-    # SQLite remains the local fallback/reserve database.
+    """
+    Supabase PostgreSQL is PRIMARY whenever DATABASE_URL exists.
+
+    SQLite remains the local fallback/reserve database.
+    """
 
     if DATABASE_URL:
         connection = psycopg.connect(
             DATABASE_URL,
             row_factory=dict_row,
         )
-        return PostgresConnection(connection)
+
+        return PostgresConnection(
+            connection
+        )
 
     connection = sqlite3.connect(
         SQLITE_DB,
@@ -177,11 +200,14 @@ SEASONS = [
 
 
 def get_current_season(current_date=None):
-    # Returns the current Indian seasonal environment.
-    #
-    # Seasons are broad environmental phases rather than
-    # strict meteorological classifications. Real weather
-    # controls the actual daily atmosphere.
+    """
+    Returns the current Indian seasonal environment.
+
+    Seasons are broad environmental phases rather than strict
+    meteorological classifications.
+
+    Real weather controls the actual daily atmosphere.
+    """
 
     if current_date is None:
         current_date = india_now().date()
@@ -196,10 +222,13 @@ def get_current_season(current_date=None):
 
 
 def get_season_progress(current_date=None):
-    # Returns approximate progress through the current season.
-    #
-    # This is visual metadata for the Forest.
-    # It does not affect points, badges or user progression.
+    """
+    Returns approximate progress through the current season.
+
+    This is visual metadata for the Forest.
+
+    It does not affect points, badges or user progression.
+    """
 
     if current_date is None:
         current_date = india_now().date()
@@ -208,28 +237,82 @@ def get_season_progress(current_date=None):
     month = current_date.month
 
     if month == 1:
-        start = datetime(year, 1, 1).date()
-        end = datetime(year, 1, 31).date()
+        start = datetime(
+            year,
+            1,
+            1,
+        ).date()
+
+        end = datetime(
+            year,
+            1,
+            31,
+        ).date()
 
     elif month in (2, 3):
-        start = datetime(year, 2, 1).date()
-        end = datetime(year, 3, 31).date()
+        start = datetime(
+            year,
+            2,
+            1,
+        ).date()
+
+        end = datetime(
+            year,
+            3,
+            31,
+        ).date()
 
     elif month in (4, 5, 6):
-        start = datetime(year, 4, 1).date()
-        end = datetime(year, 6, 30).date()
+        start = datetime(
+            year,
+            4,
+            1,
+        ).date()
+
+        end = datetime(
+            year,
+            6,
+            30,
+        ).date()
 
     elif month in (7, 8, 9):
-        start = datetime(year, 7, 1).date()
-        end = datetime(year, 9, 30).date()
+        start = datetime(
+            year,
+            7,
+            1,
+        ).date()
+
+        end = datetime(
+            year,
+            9,
+            30,
+        ).date()
 
     elif month in (10, 11):
-        start = datetime(year, 10, 1).date()
-        end = datetime(year, 11, 30).date()
+        start = datetime(
+            year,
+            10,
+            1,
+        ).date()
+
+        end = datetime(
+            year,
+            11,
+            30,
+        ).date()
 
     else:
-        start = datetime(year, 12, 1).date()
-        end = datetime(year + 1, 1, 31).date()
+        start = datetime(
+            year,
+            12,
+            1,
+        ).date()
+
+        end = datetime(
+            year + 1,
+            1,
+            31,
+        ).date()
 
     total_days = max(
         1,
@@ -246,7 +329,10 @@ def get_season_progress(current_date=None):
 
     return max(
         0,
-        min(100, round(progress)),
+        min(
+            100,
+            round(progress),
+        ),
     )
 
 
@@ -273,14 +359,22 @@ def hash_password(password: str) -> str:
     )
 
 
-def verify_password(password: str, stored_hash: str) -> bool:
+def verify_password(
+    password: str,
+    stored_hash: str,
+) -> bool:
+
     try:
-        algorithm, salt_hex, hash_hex = stored_hash.split("$")
+        algorithm, salt_hex, hash_hex = (
+            stored_hash.split("$")
+        )
 
         if algorithm != "scrypt":
             return False
 
-        salt = bytes.fromhex(salt_hex)
+        salt = bytes.fromhex(
+            salt_hex
+        )
 
         derived = hashlib.scrypt(
             password.encode("utf-8"),
@@ -304,103 +398,131 @@ def verify_password(password: str, stored_hash: str) -> bool:
 # ============================================================
 
 def init_db():
+
     db = get_db()
 
     try:
+
         if DATABASE_URL:
+
+            # ------------------------------------------------
+            # POSTGRESQL / SUPABASE
+            # ------------------------------------------------
+
             db.execute(
-                "CREATE TABLE IF NOT EXISTS users ("
-                "id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, "
-                "username TEXT NOT NULL UNIQUE, "
-                "password_hash TEXT NOT NULL, "
-                "role TEXT NOT NULL DEFAULT 'user' "
-                "CHECK (role IN ('user', 'admin')), "
-                "created_at TEXT NOT NULL, "
-                "points INTEGER NOT NULL DEFAULT 0, "
-                "streak INTEGER NOT NULL DEFAULT 0, "
-                "level INTEGER NOT NULL DEFAULT 1, "
-                "forest_actions INTEGER NOT NULL DEFAULT 0"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'user'
+                        CHECK (role IN ('user', 'admin')),
+                    created_at TEXT NOT NULL,
+                    points INTEGER NOT NULL DEFAULT 0,
+                    streak INTEGER NOT NULL DEFAULT 0,
+                    level INTEGER NOT NULL DEFAULT 1,
+                    forest_actions INTEGER NOT NULL DEFAULT 0
+                )
+                """
             )
 
             db.execute(
-                "CREATE TABLE IF NOT EXISTS sessions ("
-                "token TEXT PRIMARY KEY, "
-                "user_id BIGINT NOT NULL REFERENCES users(id), "
-                "created_at TEXT NOT NULL"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token TEXT PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(id),
+                    created_at TEXT NOT NULL
+                )
+                """
             )
 
             db.execute(
-                "CREATE TABLE IF NOT EXISTS reviews ("
-                "id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, "
-                "name TEXT NOT NULL, "
-                "rating INTEGER NOT NULL "
-                "CHECK (rating >= 1 AND rating <= 5), "
-                "review TEXT NOT NULL, "
-                "created_at TEXT NOT NULL, "
-                "owner_token TEXT"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS reviews (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    rating INTEGER NOT NULL
+                        CHECK (rating >= 1 AND rating <= 5),
+                    review TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    owner_token TEXT
+                )
+                """
             )
 
             db.execute(
-                "CREATE TABLE IF NOT EXISTS challenge_completions ("
-                "id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, "
-                "user_id BIGINT NOT NULL REFERENCES users(id), "
-                "challenge_id TEXT NOT NULL, "
-                "challenge_date TEXT NOT NULL, "
-                "completed_at TEXT NOT NULL, "
-                "points INTEGER NOT NULL, "
-                "UNIQUE(user_id, challenge_date)"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS challenge_completions (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(id),
+                    challenge_id TEXT NOT NULL,
+                    challenge_date TEXT NOT NULL,
+                    completed_at TEXT NOT NULL,
+                    points INTEGER NOT NULL,
+                    UNIQUE(user_id, challenge_date)
+                )
+                """
             )
 
         else:
+
+            # ------------------------------------------------
+            # SQLITE FALLBACK
+            # ------------------------------------------------
+
             db.execute(
-                "CREATE TABLE IF NOT EXISTS users ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "username TEXT NOT NULL UNIQUE, "
-                "password_hash TEXT NOT NULL, "
-                "role TEXT NOT NULL DEFAULT 'user' "
-                "CHECK (role IN ('user', 'admin')), "
-                "created_at TEXT NOT NULL, "
-                "points INTEGER NOT NULL DEFAULT 0, "
-                "streak INTEGER NOT NULL DEFAULT 0, "
-                "level INTEGER NOT NULL DEFAULT 1, "
-                "forest_actions INTEGER NOT NULL DEFAULT 0"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'user'
+                        CHECK (role IN ('user', 'admin')),
+                    created_at TEXT NOT NULL,
+                    points INTEGER NOT NULL DEFAULT 0,
+                    streak INTEGER NOT NULL DEFAULT 0,
+                    level INTEGER NOT NULL DEFAULT 1,
+                    forest_actions INTEGER NOT NULL DEFAULT 0
+                )
+                """
             )
 
             db.execute(
-                "CREATE TABLE IF NOT EXISTS sessions ("
-                "token TEXT PRIMARY KEY, "
-                "user_id INTEGER NOT NULL, "
-                "created_at TEXT NOT NULL"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
             )
 
             db.execute(
-                "CREATE TABLE IF NOT EXISTS reviews ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "name TEXT NOT NULL, "
-                "rating INTEGER NOT NULL "
-                "CHECK (rating >= 1 AND rating <= 5), "
-                "review TEXT NOT NULL, "
-                "created_at TEXT NOT NULL, "
-                "owner_token TEXT"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    rating INTEGER NOT NULL
+                        CHECK (rating >= 1 AND rating <= 5),
+                    review TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    owner_token TEXT
+                )
+                """
             )
 
             db.execute(
-                "CREATE TABLE IF NOT EXISTS challenge_completions ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "user_id INTEGER NOT NULL, "
-                "challenge_id TEXT NOT NULL, "
-                "challenge_date TEXT NOT NULL, "
-                "completed_at TEXT NOT NULL, "
-                "points INTEGER NOT NULL, "
-                "UNIQUE(user_id, challenge_date)"
-                ")"
+                """
+                CREATE TABLE IF NOT EXISTS challenge_completions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    challenge_id TEXT NOT NULL,
+                    challenge_date TEXT NOT NULL,
+                    completed_at TEXT NOT NULL,
+                    points INTEGER NOT NULL,
+                    UNIQUE(user_id, challenge_date)
+                )
+                """
             )
 
         db.commit()
@@ -590,8 +712,11 @@ CHALLENGES = [
 
 
 def get_today_challenge():
-    # Everyone receives the same challenge for the same
-    # Indian calendar date.
+
+    """
+    Everyone receives the same challenge for the same
+    Indian calendar date.
+    """
 
     today = india_now().date()
 
@@ -605,6 +730,7 @@ def get_today_challenge():
 
 
 def get_level_from_points(points: int) -> int:
+
     return max(
         1,
         (points // 100) + 1,
@@ -616,12 +742,15 @@ def challenge_already_completed(
     user_id: int,
     challenge_date: str,
 ):
+
     row = db.execute(
-        "SELECT * "
-        "FROM challenge_completions "
-        "WHERE user_id = ? "
-        "AND challenge_date = ? "
-        "LIMIT 1",
+        """
+        SELECT *
+        FROM challenge_completions
+        WHERE user_id = ?
+        AND challenge_date = ?
+        LIMIT 1
+        """,
         (
             user_id,
             challenge_date,
@@ -833,11 +962,17 @@ FOREST_STAGES = [
 # FOREST PROGRESSION HELPERS
 # ============================================================
 
-def get_completed_challenge_count(db, user_id: int):
+def get_completed_challenge_count(
+    db,
+    user_id: int,
+):
+
     row = db.execute(
-        "SELECT COUNT(*) AS count "
-        "FROM challenge_completions "
-        "WHERE user_id = ?",
+        """
+        SELECT COUNT(*) AS count
+        FROM challenge_completions
+        WHERE user_id = ?
+        """,
         (user_id,),
     ).fetchone()
 
@@ -848,12 +983,18 @@ def get_completed_challenge_count(db, user_id: int):
     )
 
 
-def get_category_counts(db, user_id: int):
+def get_category_counts(
+    db,
+    user_id: int,
+):
+
     rows = db.execute(
-        "SELECT challenge_id, COUNT(*) AS count "
-        "FROM challenge_completions "
-        "WHERE user_id = ? "
-        "GROUP BY challenge_id",
+        """
+        SELECT challenge_id, COUNT(*) AS count
+        FROM challenge_completions
+        WHERE user_id = ?
+        GROUP BY challenge_id
+        """,
         (user_id,),
     ).fetchall()
 
@@ -868,6 +1009,7 @@ def get_category_counts(db, user_id: int):
     }
 
     for row in rows:
+
         challenge_id = row["challenge_id"]
         count = int(row["count"])
 
@@ -881,19 +1023,30 @@ def get_category_counts(db, user_id: int):
     return category_counts
 
 
-def get_forest_stage(forest_actions: int):
+def get_forest_stage(
+    forest_actions: int,
+):
+
     current = FOREST_STAGES[0]
     next_stage = None
 
     for stage in FOREST_STAGES:
+
         if forest_actions >= stage["minimum_actions"]:
             current = stage
+
         elif next_stage is None:
             next_stage = stage
 
     if next_stage:
-        previous_requirement = current["minimum_actions"]
-        next_requirement = next_stage["minimum_actions"]
+
+        previous_requirement = (
+            current["minimum_actions"]
+        )
+
+        next_requirement = (
+            next_stage["minimum_actions"]
+        )
 
         span = (
             next_requirement
@@ -901,8 +1054,11 @@ def get_forest_stage(forest_actions: int):
         )
 
         if span <= 0:
+
             progress = 100
+
         else:
+
             progress = (
                 (
                     forest_actions
@@ -913,7 +1069,10 @@ def get_forest_stage(forest_actions: int):
 
         progress = max(
             0,
-            min(100, round(progress)),
+            min(
+                100,
+                round(progress),
+            ),
         )
 
     else:
@@ -930,10 +1089,13 @@ def get_unlocked_features(
     forest_actions: int,
     streak: int,
 ):
+
     unlocked = set()
 
     for stage in FOREST_STAGES:
+
         if forest_actions >= stage["minimum_actions"]:
+
             unlocked.update(
                 stage["unlocks"]
             )
@@ -965,6 +1127,7 @@ def get_badges(
     challenge_count: int,
     streak: int,
 ):
+
     category_counts = get_category_counts(
         db,
         user_id,
@@ -973,24 +1136,30 @@ def get_badges(
     badges = []
 
     for badge in FOREST_BADGES:
+
         earned = False
         current_value = 0
 
         if badge["type"] == "challenge_count":
+
             current_value = challenge_count
+
             earned = (
                 challenge_count
                 >= badge["requirement"]
             )
 
         elif badge["type"] == "streak":
+
             current_value = streak
+
             earned = (
                 streak
                 >= badge["requirement"]
             )
 
         elif badge["type"] == "category_count":
+
             current_value = category_counts.get(
                 badge["category"],
                 0,
@@ -1012,12 +1181,20 @@ def get_badges(
     return badges
 
 
-def get_forest_payload(db, user):
-    user_id = int(user["id"])
+def get_forest_payload(
+    db,
+    user,
+):
 
-    challenge_count = get_completed_challenge_count(
-        db,
-        user_id,
+    user_id = int(
+        user["id"]
+    )
+
+    challenge_count = (
+        get_completed_challenge_count(
+            db,
+            user_id,
+        )
     )
 
     forest_actions = int(
@@ -1028,7 +1205,11 @@ def get_forest_payload(db, user):
         user["streak"] or 0
     )
 
-    stage, next_stage, stage_progress = get_forest_stage(
+    (
+        stage,
+        next_stage,
+        stage_progress,
+    ) = get_forest_stage(
         forest_actions
     )
 
@@ -1051,17 +1232,23 @@ def get_forest_payload(db, user):
     ]
 
     if next_stage:
+
         next_unlock = {
             "name": next_stage["name"],
             "icon": next_stage["icon"],
-            "required_actions": next_stage["minimum_actions"],
+            "required_actions": next_stage[
+                "minimum_actions"
+            ],
             "remaining_actions": max(
                 0,
-                next_stage["minimum_actions"]
-                - forest_actions,
+                next_stage[
+                    "minimum_actions"
+                ] - forest_actions,
             ),
         }
+
     else:
+
         next_unlock = None
 
     return {
@@ -1073,15 +1260,21 @@ def get_forest_payload(db, user):
             "name": stage["name"],
             "icon": stage["icon"],
             "description": stage["description"],
-            "minimum_actions": stage["minimum_actions"],
+            "minimum_actions": stage[
+                "minimum_actions"
+            ],
         },
         "stage_progress": stage_progress,
         "unlocked": unlocked,
         "next_unlock": next_unlock,
         "badges": badges,
         "earned_badges": earned_badges,
-        "earned_badge_count": len(earned_badges),
-        "total_badge_count": len(badges),
+        "earned_badge_count": len(
+            earned_badges
+        ),
+        "total_badge_count": len(
+            badges
+        ),
     }
 
 
@@ -1089,8 +1282,13 @@ def get_forest_payload(db, user):
 # WEATHER
 # ============================================================
 
-def weather_code_to_condition(weather_code: int):
-    # Open-Meteo WMO weather interpretation.
+def weather_code_to_condition(
+    weather_code: int,
+):
+
+    """
+    Open-Meteo / WMO weather interpretation.
+    """
 
     if weather_code == 0:
         return "clear"
@@ -1104,29 +1302,63 @@ def weather_code_to_condition(weather_code: int):
     if weather_code in (45, 48):
         return "fog"
 
-    if weather_code in (51, 53, 55, 56, 57):
+    if weather_code in (
+        51,
+        53,
+        55,
+        56,
+        57,
+    ):
         return "drizzle"
 
-    if weather_code in (61, 63, 65, 66, 67):
+    if weather_code in (
+        61,
+        63,
+        65,
+        66,
+        67,
+    ):
         return "rain"
 
-    if weather_code in (71, 73, 75, 77):
+    if weather_code in (
+        71,
+        73,
+        75,
+        77,
+    ):
         return "snow"
 
-    if weather_code in (80, 81, 82):
+    if weather_code in (
+        80,
+        81,
+        82,
+    ):
         return "showers"
 
-    if weather_code in (85, 86):
+    if weather_code in (
+        85,
+        86,
+    ):
         return "snow_showers"
 
-    if weather_code in (95, 96, 99):
+    if weather_code in (
+        95,
+        96,
+        99,
+    ):
         return "thunderstorm"
 
     return "cloudy"
 
 
-def get_time_of_day(latitude: float, longitude: float):
-    # Helper reserved for future Forest improvements.
+def get_time_of_day(
+    latitude: float,
+    longitude: float,
+):
+
+    """
+    Reserved for future Forest improvements.
+    """
 
     return {
         "latitude": latitude,
@@ -1138,25 +1370,31 @@ def get_time_of_day(latitude: float, longitude: float):
 # AUTH HELPERS
 # ============================================================
 
-def get_current_user(db, token: str):
+def get_current_user(
+    db,
+    token: str,
+):
+
     if not token:
         return None
 
     row = db.execute(
-        "SELECT "
-        "users.id, "
-        "users.username, "
-        "users.role, "
-        "users.created_at, "
-        "users.points, "
-        "users.streak, "
-        "users.level, "
-        "users.forest_actions "
-        "FROM sessions "
-        "JOIN users "
-        "ON users.id = sessions.user_id "
-        "WHERE sessions.token = ? "
-        "LIMIT 1",
+        """
+        SELECT
+            users.id,
+            users.username,
+            users.role,
+            users.created_at,
+            users.points,
+            users.streak,
+            users.level,
+            users.forest_actions
+        FROM sessions
+        JOIN users
+            ON users.id = sessions.user_id
+        WHERE sessions.token = ?
+        LIMIT 1
+        """,
         (token,),
     ).fetchone()
 
@@ -1169,6 +1407,7 @@ def get_current_user(db, token: str):
 
 @app.get("/")
 def root():
+
     return {
         "name": "GreenPulse API",
         "status": "online",
@@ -1177,6 +1416,7 @@ def root():
 
 @app.get("/api/health")
 def health():
+
     return {
         "status": "ok",
         "database": (
@@ -1189,6 +1429,7 @@ def health():
 
 @app.get("/api/impact")
 def impact():
+
     return {
         "message": "GreenPulse impact API is online."
     }
@@ -1200,33 +1441,48 @@ def impact():
 
 @app.post("/api/register")
 @app.post("/api/auth/register")
-def register(request: RegisterRequest):
+def register(
+    request: RegisterRequest,
+):
+
     username = request.username.strip()
 
     if len(username) < 2:
+
         raise HTTPException(
             status_code=400,
-            detail="Username must contain at least 2 characters.",
+            detail=(
+                "Username must contain "
+                "at least 2 characters."
+            ),
         )
 
     if len(request.password) < 6:
+
         raise HTTPException(
             status_code=400,
-            detail="Password must contain at least 6 characters.",
+            detail=(
+                "Password must contain "
+                "at least 6 characters."
+            ),
         )
 
     db = get_db()
 
     try:
+
         existing = db.execute(
-            "SELECT id "
-            "FROM users "
-            "WHERE LOWER(username) = LOWER(?) "
-            "LIMIT 1",
+            """
+            SELECT id
+            FROM users
+            WHERE LOWER(username) = LOWER(?)
+            LIMIT 1
+            """,
             (username,),
         ).fetchone()
 
         if existing:
+
             raise HTTPException(
                 status_code=409,
                 detail="Username already exists.",
@@ -1239,19 +1495,31 @@ def register(request: RegisterRequest):
         created_at = india_now_iso()
 
         if DATABASE_URL:
+
             row = db.execute(
-                "INSERT INTO users ("
-                "username, "
-                "password_hash, "
-                "role, "
-                "created_at, "
-                "points, "
-                "streak, "
-                "level, "
-                "forest_actions"
-                ") "
-                "VALUES (?, ?, 'user', ?, 0, 0, 1, 0) "
-                "RETURNING id, username, role",
+                """
+                INSERT INTO users (
+                    username,
+                    password_hash,
+                    role,
+                    created_at,
+                    points,
+                    streak,
+                    level,
+                    forest_actions
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    'user',
+                    ?,
+                    0,
+                    0,
+                    1,
+                    0
+                )
+                RETURNING id, username, role
+                """,
                 (
                     username,
                     password_hash,
@@ -1260,18 +1528,30 @@ def register(request: RegisterRequest):
             ).fetchone()
 
         else:
+
             cursor = db.execute(
-                "INSERT INTO users ("
-                "username, "
-                "password_hash, "
-                "role, "
-                "created_at, "
-                "points, "
-                "streak, "
-                "level, "
-                "forest_actions"
-                ") "
-                "VALUES (?, ?, 'user', ?, 0, 0, 1, 0)",
+                """
+                INSERT INTO users (
+                    username,
+                    password_hash,
+                    role,
+                    created_at,
+                    points,
+                    streak,
+                    level,
+                    forest_actions
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    'user',
+                    ?,
+                    0,
+                    0,
+                    1,
+                    0
+                )
+                """,
                 (
                     username,
                     password_hash,
@@ -1293,10 +1573,12 @@ def register(request: RegisterRequest):
         }
 
     except HTTPException:
+
         db.rollback()
         raise
 
     except Exception as error:
+
         db.rollback()
 
         print(
@@ -1310,6 +1592,7 @@ def register(request: RegisterRequest):
         )
 
     finally:
+
         db.close()
 
 
@@ -1319,44 +1602,60 @@ def register(request: RegisterRequest):
 
 @app.post("/api/login")
 @app.post("/api/auth/login")
-def login(request: LoginRequest):
+def login(
+    request: LoginRequest,
+):
+
     username = request.username.strip()
 
     db = get_db()
 
     try:
+
         row = db.execute(
-            "SELECT * "
-            "FROM users "
-            "WHERE LOWER(username) = LOWER(?) "
-            "LIMIT 1",
+            """
+            SELECT *
+            FROM users
+            WHERE LOWER(username) = LOWER(?)
+            LIMIT 1
+            """,
             (username,),
         ).fetchone()
 
         if not row:
+
             raise HTTPException(
                 status_code=401,
-                detail="Invalid username or password.",
+                detail=(
+                    "Invalid username "
+                    "or password."
+                ),
             )
 
         if not verify_password(
             request.password,
             row["password_hash"],
         ):
+
             raise HTTPException(
                 status_code=401,
-                detail="Invalid username or password.",
+                detail=(
+                    "Invalid username "
+                    "or password."
+                ),
             )
 
         token = secrets.token_urlsafe(32)
 
         db.execute(
-            "INSERT INTO sessions ("
-            "token, "
-            "user_id, "
-            "created_at"
-            ") "
-            "VALUES (?, ?, ?)",
+            """
+            INSERT INTO sessions (
+                token,
+                user_id,
+                created_at
+            )
+            VALUES (?, ?, ?)
+            """,
             (
                 token,
                 row["id"],
@@ -1376,10 +1675,12 @@ def login(request: LoginRequest):
         }
 
     except HTTPException:
+
         db.rollback()
         raise
 
     except Exception as error:
+
         db.rollback()
 
         print(
@@ -1393,6 +1694,7 @@ def login(request: LoginRequest):
         )
 
     finally:
+
         db.close()
 
 
@@ -1401,16 +1703,21 @@ def login(request: LoginRequest):
 # ============================================================
 
 @app.get("/api/me")
-def me(token: str):
+def me(
+    token: str,
+):
+
     db = get_db()
 
     try:
+
         user = get_current_user(
             db,
             token,
         )
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid or expired session.",
@@ -1421,6 +1728,7 @@ def me(token: str):
         }
 
     finally:
+
         db.close()
 
 
@@ -1429,13 +1737,19 @@ def me(token: str):
 # ============================================================
 
 @app.post("/api/logout")
-def logout(token: str):
+def logout(
+    token: str,
+):
+
     db = get_db()
 
     try:
+
         db.execute(
-            "DELETE FROM sessions "
-            "WHERE token = ?",
+            """
+            DELETE FROM sessions
+            WHERE token = ?
+            """,
             (token,),
         )
 
@@ -1446,6 +1760,7 @@ def logout(token: str):
         }
 
     finally:
+
         db.close()
 
 
@@ -1455,18 +1770,22 @@ def logout(token: str):
 
 @app.get("/api/reviews")
 def get_reviews():
+
     db = get_db()
 
     try:
+
         rows = db.execute(
-            "SELECT "
-            "id, "
-            "name, "
-            "rating, "
-            "review, "
-            "created_at "
-            "FROM reviews "
-            "ORDER BY id DESC"
+            """
+            SELECT
+                id,
+                name,
+                rating,
+                review,
+                created_at
+            FROM reviews
+            ORDER BY id DESC
+            """
         ).fetchall()
 
         return [
@@ -1475,6 +1794,7 @@ def get_reviews():
         ]
 
     finally:
+
         db.close()
 
 
@@ -1483,20 +1803,26 @@ def get_reviews():
 # ============================================================
 
 @app.post("/api/reviews")
-def create_review(review: Review):
+def create_review(
+    review: Review,
+):
+
     if review.rating < 1 or review.rating > 5:
+
         raise HTTPException(
             status_code=400,
             detail="Rating must be between 1 and 5.",
         )
 
     if not review.name.strip():
+
         raise HTTPException(
             status_code=400,
             detail="Name is required.",
         )
 
     if not review.review.strip():
+
         raise HTTPException(
             status_code=400,
             detail="Review cannot be empty.",
@@ -1505,15 +1831,18 @@ def create_review(review: Review):
     db = get_db()
 
     try:
+
         db.execute(
-            "INSERT INTO reviews ("
-            "name, "
-            "rating, "
-            "review, "
-            "created_at, "
-            "owner_token"
-            ") "
-            "VALUES (?, ?, ?, ?, ?)",
+            """
+            INSERT INTO reviews (
+                name,
+                rating,
+                review,
+                created_at,
+                owner_token
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
             (
                 review.name.strip(),
                 review.rating,
@@ -1530,6 +1859,7 @@ def create_review(review: Review):
         }
 
     except Exception as error:
+
         db.rollback()
 
         print(
@@ -1543,6 +1873,7 @@ def create_review(review: Review):
         )
 
     finally:
+
         db.close()
 
 
@@ -1551,8 +1882,12 @@ def create_review(review: Review):
 # ============================================================
 
 @app.put("/api/reviews")
-def update_review(request: ReviewUpdate):
+def update_review(
+    request: ReviewUpdate,
+):
+
     if request.rating < 1 or request.rating > 5:
+
         raise HTTPException(
             status_code=400,
             detail="Rating must be between 1 and 5.",
@@ -1561,26 +1896,31 @@ def update_review(request: ReviewUpdate):
     db = get_db()
 
     try:
+
         current_user = get_current_user(
             db,
             request.token,
         )
 
         if not current_user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
             )
 
         row = db.execute(
-            "SELECT * "
-            "FROM reviews "
-            "WHERE id = ? "
-            "LIMIT 1",
+            """
+            SELECT *
+            FROM reviews
+            WHERE id = ?
+            LIMIT 1
+            """,
             (request.review_id,),
         ).fetchone()
 
         if not row:
+
             raise HTTPException(
                 status_code=404,
                 detail="Review not found.",
@@ -1598,18 +1938,21 @@ def update_review(request: ReviewUpdate):
         )
 
         if not is_owner and not is_admin:
+
             raise HTTPException(
                 status_code=403,
                 detail="You cannot edit this review.",
             )
 
         db.execute(
-            "UPDATE reviews "
-            "SET "
-            "name = ?, "
-            "rating = ?, "
-            "review = ? "
-            "WHERE id = ?",
+            """
+            UPDATE reviews
+            SET
+                name = ?,
+                rating = ?,
+                review = ?
+            WHERE id = ?
+            """,
             (
                 request.name.strip(),
                 request.rating,
@@ -1625,10 +1968,12 @@ def update_review(request: ReviewUpdate):
         }
 
     except HTTPException:
+
         db.rollback()
         raise
 
     except Exception as error:
+
         db.rollback()
 
         print(
@@ -1642,6 +1987,7 @@ def update_review(request: ReviewUpdate):
         )
 
     finally:
+
         db.close()
 
 
@@ -1650,30 +1996,38 @@ def update_review(request: ReviewUpdate):
 # ============================================================
 
 @app.delete("/api/reviews")
-def delete_review(request: ReviewDelete):
+def delete_review(
+    request: ReviewDelete,
+):
+
     db = get_db()
 
     try:
+
         current_user = get_current_user(
             db,
             request.token,
         )
 
         if not current_user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
             )
 
         row = db.execute(
-            "SELECT * "
-            "FROM reviews "
-            "WHERE id = ? "
-            "LIMIT 1",
+            """
+            SELECT *
+            FROM reviews
+            WHERE id = ?
+            LIMIT 1
+            """,
             (request.review_id,),
         ).fetchone()
 
         if not row:
+
             raise HTTPException(
                 status_code=404,
                 detail="Review not found.",
@@ -1691,14 +2045,17 @@ def delete_review(request: ReviewDelete):
         )
 
         if not is_owner and not is_admin:
+
             raise HTTPException(
                 status_code=403,
                 detail="You cannot delete this review.",
             )
 
         db.execute(
-            "DELETE FROM reviews "
-            "WHERE id = ?",
+            """
+            DELETE FROM reviews
+            WHERE id = ?
+            """,
             (request.review_id,),
         )
 
@@ -1709,10 +2066,12 @@ def delete_review(request: ReviewDelete):
         }
 
     except HTTPException:
+
         db.rollback()
         raise
 
     except Exception as error:
+
         db.rollback()
 
         print(
@@ -1726,6 +2085,7 @@ def delete_review(request: ReviewDelete):
         )
 
     finally:
+
         db.close()
 
 
@@ -1734,16 +2094,21 @@ def delete_review(request: ReviewDelete):
 # ============================================================
 
 @app.get("/api/challenges/today")
-def challenge_today(token: str):
+def challenge_today(
+    token: str,
+):
+
     db = get_db()
 
     try:
+
         user = get_current_user(
             db,
             token,
         )
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
@@ -1771,6 +2136,7 @@ def challenge_today(token: str):
         }
 
     finally:
+
         db.close()
 
 
@@ -1782,15 +2148,18 @@ def challenge_today(token: str):
 def complete_challenge(
     request: ChallengeCompleteRequest,
 ):
+
     db = get_db()
 
     try:
+
         user = get_current_user(
             db,
             request.token,
         )
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
@@ -1800,12 +2169,14 @@ def complete_challenge(
             (
                 item
                 for item in CHALLENGES
-                if item["id"] == request.challenge_id
+                if item["id"]
+                == request.challenge_id
             ),
             None,
         )
 
         if not challenge:
+
             raise HTTPException(
                 status_code=404,
                 detail="Challenge not found.",
@@ -1820,9 +2191,13 @@ def complete_challenge(
         )
 
         if existing:
+
             raise HTTPException(
                 status_code=409,
-                detail="Today's challenge is already completed.",
+                detail=(
+                    "Today's challenge "
+                    "is already completed."
+                ),
             )
 
         # ----------------------------------------------------
@@ -1834,17 +2209,22 @@ def complete_challenge(
         )
 
         previous_completion = db.execute(
-            "SELECT challenge_date "
-            "FROM challenge_completions "
-            "WHERE user_id = ? "
-            "ORDER BY challenge_date DESC "
-            "LIMIT 1",
+            """
+            SELECT challenge_date
+            FROM challenge_completions
+            WHERE user_id = ?
+            ORDER BY challenge_date DESC
+            LIMIT 1
+            """,
             (user["id"],),
         ).fetchone()
 
         if previous_completion:
+
             previous_date = datetime.strptime(
-                previous_completion["challenge_date"],
+                previous_completion[
+                    "challenge_date"
+                ],
                 "%Y-%m-%d",
             ).date()
 
@@ -1854,13 +2234,17 @@ def complete_challenge(
                 today_date
                 - timedelta(days=1)
             ):
+
                 new_streak = (
                     current_streak + 1
                 )
+
             else:
+
                 new_streak = 1
 
         else:
+
             new_streak = 1
 
         # ----------------------------------------------------
@@ -1896,14 +2280,16 @@ def complete_challenge(
         # ----------------------------------------------------
 
         db.execute(
-            "INSERT INTO challenge_completions ("
-            "user_id, "
-            "challenge_id, "
-            "challenge_date, "
-            "completed_at, "
-            "points"
-            ") "
-            "VALUES (?, ?, ?, ?, ?)",
+            """
+            INSERT INTO challenge_completions (
+                user_id,
+                challenge_id,
+                challenge_date,
+                completed_at,
+                points
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
             (
                 user["id"],
                 challenge["id"],
@@ -1918,13 +2304,15 @@ def complete_challenge(
         # ----------------------------------------------------
 
         db.execute(
-            "UPDATE users "
-            "SET "
-            "points = ?, "
-            "streak = ?, "
-            "level = ?, "
-            "forest_actions = ? "
-            "WHERE id = ?",
+            """
+            UPDATE users
+            SET
+                points = ?,
+                streak = ?,
+                level = ?,
+                forest_actions = ?
+            WHERE id = ?
+            """,
             (
                 new_points,
                 new_streak,
@@ -1948,10 +2336,12 @@ def complete_challenge(
         }
 
     except HTTPException:
+
         db.rollback()
         raise
 
     except Exception as error:
+
         db.rollback()
 
         print(
@@ -1965,6 +2355,7 @@ def complete_challenge(
         )
 
     finally:
+
         db.close()
 
 
@@ -1973,30 +2364,37 @@ def complete_challenge(
 # ============================================================
 
 @app.get("/api/challenges/history")
-def challenge_history(token: str):
+def challenge_history(
+    token: str,
+):
+
     db = get_db()
 
     try:
+
         user = get_current_user(
             db,
             token,
         )
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
             )
 
         rows = db.execute(
-            "SELECT "
-            "challenge_id, "
-            "challenge_date, "
-            "completed_at, "
-            "points "
-            "FROM challenge_completions "
-            "WHERE user_id = ? "
-            "ORDER BY challenge_date DESC",
+            """
+            SELECT
+                challenge_id,
+                challenge_date,
+                completed_at,
+                points
+            FROM challenge_completions
+            WHERE user_id = ?
+            ORDER BY challenge_date DESC
+            """,
             (user["id"],),
         ).fetchall()
 
@@ -2008,15 +2406,22 @@ def challenge_history(token: str):
         history = []
 
         for row in rows:
+
             challenge = challenge_map.get(
                 row["challenge_id"]
             )
 
             history.append(
                 {
-                    "challenge_id": row["challenge_id"],
-                    "challenge_date": row["challenge_date"],
-                    "completed_at": row["completed_at"],
+                    "challenge_id": row[
+                        "challenge_id"
+                    ],
+                    "challenge_date": row[
+                        "challenge_date"
+                    ],
+                    "completed_at": row[
+                        "completed_at"
+                    ],
                     "points": row["points"],
                     "challenge": challenge,
                 }
@@ -2028,6 +2433,7 @@ def challenge_history(token: str):
         }
 
     finally:
+
         db.close()
 
 
@@ -2036,16 +2442,21 @@ def challenge_history(token: str):
 # ============================================================
 
 @app.get("/api/forest")
-def forest(token: str):
+def forest(
+    token: str,
+):
+
     db = get_db()
 
     try:
+
         user = get_current_user(
             db,
             token,
         )
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
@@ -2057,6 +2468,7 @@ def forest(token: str):
         )
 
     finally:
+
         db.close()
 
 
@@ -2065,16 +2477,21 @@ def forest(token: str):
 # ============================================================
 
 @app.get("/api/forest/badges")
-def forest_badges(token: str):
+def forest_badges(
+    token: str,
+):
+
     db = get_db()
 
     try:
+
         user = get_current_user(
             db,
             token,
         )
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
@@ -2087,7 +2504,9 @@ def forest_badges(token: str):
 
         return {
             "badges": payload["badges"],
-            "earned_badges": payload["earned_badges"],
+            "earned_badges": payload[
+                "earned_badges"
+            ],
             "earned_badge_count": payload[
                 "earned_badge_count"
             ],
@@ -2097,6 +2516,7 @@ def forest_badges(token: str):
         }
 
     finally:
+
         db.close()
 
 
@@ -2109,15 +2529,19 @@ def forest_weather(
     latitude: float = 28.6139,
     longitude: float = 77.2090,
 ):
-    # Live weather source for the Forest.
-    #
-    # Defaults to Delhi coordinates.
-    # The frontend can provide another location later.
-    #
-    # Open-Meteo does not require an API key.
-    #
-    # Weather + day/night + season are combined into
-    # a semantic Forest environment.
+
+    """
+    Fetch live weather from Open-Meteo.
+
+    Default:
+        Delhi
+
+    The frontend can provide another location:
+
+        /api/forest/weather?latitude=...&longitude=...
+
+    Open-Meteo does not require an API key.
+    """
 
     query = urllib.parse.urlencode(
         {
@@ -2152,6 +2576,7 @@ def forest_weather(
     )
 
     try:
+
         request = urllib.request.Request(
             url,
             headers={
@@ -2163,8 +2588,11 @@ def forest_weather(
             request,
             timeout=8,
         ) as response:
+
             data = json.loads(
-                response.read().decode("utf-8")
+                response.read().decode(
+                    "utf-8"
+                )
             )
 
         current = data.get(
@@ -2238,6 +2666,7 @@ def forest_weather(
         # ----------------------------------------------------
 
         if season["id"] == "spring":
+
             environment_tags.extend(
                 [
                     "fresh_growth",
@@ -2247,6 +2676,7 @@ def forest_weather(
             )
 
         elif season["id"] == "summer":
+
             environment_tags.extend(
                 [
                     "warm_light",
@@ -2256,6 +2686,7 @@ def forest_weather(
             )
 
         elif season["id"] == "monsoon":
+
             environment_tags.extend(
                 [
                     "lush_greenery",
@@ -2265,6 +2696,7 @@ def forest_weather(
             )
 
         elif season["id"] == "autumn":
+
             environment_tags.extend(
                 [
                     "earthy_tones",
@@ -2274,6 +2706,7 @@ def forest_weather(
             )
 
         elif season["id"] == "winter":
+
             environment_tags.extend(
                 [
                     "cool_air",
@@ -2292,6 +2725,7 @@ def forest_weather(
             "showers",
             "thunderstorm",
         ):
+
             environment_tags.extend(
                 [
                     "wet_foliage",
@@ -2305,6 +2739,7 @@ def forest_weather(
         # ----------------------------------------------------
 
         if condition == "thunderstorm":
+
             environment_tags.extend(
                 [
                     "storm_wind",
@@ -2318,6 +2753,7 @@ def forest_weather(
         # ----------------------------------------------------
 
         if condition == "fog":
+
             environment_tags.extend(
                 [
                     "mist",
@@ -2330,6 +2766,7 @@ def forest_weather(
         # ----------------------------------------------------
 
         if not is_day:
+
             environment_tags.extend(
                 [
                     "night_lighting",
@@ -2345,6 +2782,7 @@ def forest_weather(
             "clear",
             "partly_cloudy",
         ):
+
             environment_tags.extend(
                 [
                     "sun_rays",
@@ -2353,6 +2791,7 @@ def forest_weather(
             )
 
         return {
+
             "location": {
                 "latitude": latitude,
                 "longitude": longitude,
@@ -2360,6 +2799,7 @@ def forest_weather(
                     "timezone"
                 ),
             },
+
             "current": {
                 "temperature_c": current.get(
                     "temperature_2m"
@@ -2396,17 +2836,22 @@ def forest_weather(
                 "is_day": is_day,
                 "time_of_day": time_of_day,
             },
+
             "sun": {
                 "sunrise": sunrise,
                 "sunset": sunset,
             },
+
             "season": {
                 "id": season["id"],
                 "name": season["name"],
                 "icon": season["icon"],
-                "description": season["description"],
+                "description": season[
+                    "description"
+                ],
                 "progress": season_progress,
             },
+
             "forest_environment": {
                 "theme": theme,
                 "season": season["id"],
@@ -2418,16 +2863,21 @@ def forest_weather(
                     "showers",
                     "thunderstorm",
                 ),
-                "storm": condition == "thunderstorm",
+                "storm": (
+                    condition
+                    == "thunderstorm"
+                ),
                 "night": not is_day,
                 "environment_tags": sorted(
                     set(environment_tags)
                 ),
             },
+
             "source": "Open-Meteo",
         }
 
     except Exception as error:
+
         print(
             "FOREST WEATHER ERROR:",
             error,
@@ -2448,8 +2898,11 @@ def forest_weather(
 
 @app.get("/api/forest/season")
 def forest_season():
-    # Season is environmental world data,
-    # so authentication is not required.
+
+    """
+    Season is environmental world data,
+    so authentication is not required.
+    """
 
     today = india_now().date()
 
@@ -2459,16 +2912,22 @@ def forest_season():
 
     return {
         "date": today.isoformat(),
+
         "season": {
             "id": season["id"],
             "name": season["name"],
             "icon": season["icon"],
-            "description": season["description"],
+            "description": season[
+                "description"
+            ],
             "progress": get_season_progress(
                 today
             ),
         },
-        "source": "GreenPulse seasonal calendar",
+
+        "source": (
+            "GreenPulse seasonal calendar"
+        ),
     }
 
 
@@ -2477,16 +2936,21 @@ def forest_season():
 # ============================================================
 
 @app.get("/api/dashboard")
-def dashboard(token: str):
+def dashboard(
+    token: str,
+):
+
     db = get_db()
 
     try:
+
         user = get_current_user(
             db,
             token,
         )
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session.",
@@ -2508,6 +2972,7 @@ def dashboard(token: str):
         }
 
     finally:
+
         db.close()
 
 
@@ -2517,6 +2982,7 @@ def dashboard(token: str):
 
 @app.on_event("startup")
 def startup_message():
+
     current_season = get_current_season()
 
     print("----------------------------------------")
