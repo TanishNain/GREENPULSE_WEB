@@ -1,6 +1,7 @@
 import "./Reviews.css";
 import { useEffect, useState } from "react";
 
+const API_URL = "https://greenpulse-web-tc0g.onrender.com";
 const OWNER_TOKENS_KEY = "greenpulse_review_tokens";
 
 function getOwnerTokens() {
@@ -38,7 +39,6 @@ function removeOwnerToken(reviewId) {
   );
 }
 
-
 function Reviews() {
   const [rating, setRating] = useState(0);
   const [name, setName] = useState("");
@@ -50,10 +50,12 @@ function Reviews() {
 
   const [editingId, setEditingId] = useState(null);
 
-
   const loadReviews = async () => {
     try {
-      const response = await fetch("/api/reviews");
+      const response = await fetch(
+        `${API_URL}/api/reviews`
+      );
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -68,11 +70,9 @@ function Reviews() {
     }
   };
 
-
   useEffect(() => {
     loadReviews();
   }, []);
-
 
   const resetForm = () => {
     setName("");
@@ -80,7 +80,6 @@ function Reviews() {
     setRating(0);
     setEditingId(null);
   };
-
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -113,7 +112,7 @@ function Reviews() {
         }
 
         const response = await fetch(
-          `/api/reviews/${editingId}`,
+          `${API_URL}/api/reviews/${editingId}`,
           {
             method: "PUT",
             headers: {
@@ -145,12 +144,11 @@ function Reviews() {
         return;
       }
 
-
       /*
        * CREATE NEW REVIEW
        */
       const response = await fetch(
-        "/api/reviews",
+        `${API_URL}/api/reviews`,
         {
           method: "POST",
           headers: {
@@ -188,7 +186,6 @@ function Reviews() {
       resetForm();
 
       await loadReviews();
-
     } catch (error) {
       console.error(
         "Error saving review:",
@@ -203,7 +200,6 @@ function Reviews() {
       setSubmitting(false);
     }
   };
-
 
   const handleEdit = (item) => {
     const ownerToken = getOwnerToken(item.id);
@@ -227,7 +223,6 @@ function Reviews() {
     });
   };
 
-
   const handleDelete = async (item) => {
     const ownerToken = getOwnerToken(item.id);
 
@@ -249,7 +244,7 @@ function Reviews() {
 
     try {
       const response = await fetch(
-        `/api/reviews/${item.id}`,
+        `${API_URL}/api/reviews/${item.id}`,
         {
           method: "DELETE",
           headers: {
@@ -278,7 +273,6 @@ function Reviews() {
       alert("Review deleted successfully.");
 
       await loadReviews();
-
     } catch (error) {
       console.error(
         "Error deleting review:",
@@ -292,7 +286,6 @@ function Reviews() {
     }
   };
 
-
   const reviewCount = reviews.length;
 
   const averageRating =
@@ -305,7 +298,6 @@ function Reviews() {
           ) / reviewCount
         ).toFixed(1)
       : "—";
-
 
   const ratingCounts = {
     5: reviews.filter(
@@ -328,7 +320,6 @@ function Reviews() {
       (item) => item.rating === 1
     ).length,
   };
-
 
   return (
     <div className="reviews-page">
@@ -355,7 +346,6 @@ function Reviews() {
 
       </nav>
 
-
       <section className="reviews-hero">
 
         <span className="reviews-eyebrow">
@@ -375,7 +365,6 @@ function Reviews() {
         </p>
 
       </section>
-
 
       <section className="review-layout">
 
@@ -413,7 +402,6 @@ function Reviews() {
             </h2>
 
           </div>
-
 
           <div className="rating-area">
 
@@ -455,7 +443,6 @@ function Reviews() {
 
           </div>
 
-
           <div className="form-field">
 
             <label>
@@ -473,7 +460,6 @@ function Reviews() {
 
           </div>
 
-
           <div className="form-field">
 
             <label>
@@ -490,7 +476,6 @@ function Reviews() {
             />
 
           </div>
-
 
           <div className="review-form-actions">
 
@@ -510,7 +495,6 @@ function Reviews() {
 
             </button>
 
-
             {editingId !== null && (
               <button
                 type="button"
@@ -523,7 +507,6 @@ function Reviews() {
 
           </div>
 
-
           <p className="review-note">
 
             {editingId !== null
@@ -533,7 +516,6 @@ function Reviews() {
           </p>
 
         </form>
-
 
         <div className="review-summary">
 
@@ -555,7 +537,6 @@ function Reviews() {
 
             </div>
 
-
             <div className="summary-stars">
 
               {reviewCount > 0
@@ -572,7 +553,6 @@ function Reviews() {
                 : "☆ ☆ ☆ ☆ ☆"}
 
             </div>
-
 
             <p>
 
@@ -593,7 +573,6 @@ function Reviews() {
             </p>
 
           </div>
-
 
           <div className="rating-bars">
 
@@ -638,7 +617,6 @@ function Reviews() {
 
       </section>
 
-
       <section className="existing-reviews">
 
         <div className="existing-heading">
@@ -654,7 +632,6 @@ function Reviews() {
           </h2>
 
         </div>
-
 
         {loadingReviews ? (
 
@@ -718,7 +695,6 @@ function Reviews() {
 
                     </div>
 
-
                     <div className="review-item-stars">
 
                       {"★".repeat(
@@ -733,11 +709,9 @@ function Reviews() {
 
                   </div>
 
-
                   <p>
                     {item.review}
                   </p>
-
 
                   {isOwner && (
                     <div className="review-actions">
@@ -773,7 +747,6 @@ function Reviews() {
 
       </section>
 
-
       <section className="reviews-final">
 
         <span>🌱</span>
@@ -799,7 +772,6 @@ function Reviews() {
 
       </section>
 
-
       <footer className="reviews-footer">
 
         <div>
@@ -821,6 +793,5 @@ function Reviews() {
     </div>
   );
 }
-
 
 export default Reviews;
