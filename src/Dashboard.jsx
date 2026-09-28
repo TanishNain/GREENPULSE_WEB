@@ -9,6 +9,49 @@ const API_URL =
     ? "http://127.0.0.1:8000"
     : "https://greenpulse-web-tc0g.onrender.com";
 
+const CHALLENGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function getUnlockTime(challenge) {
+  if (!challenge?.completed) {
+    return null;
+  }
+
+  const completedAt =
+    challenge?.completion?.completed_at ||
+    challenge?.completed_at ||
+    null;
+
+  if (!completedAt) {
+    return null;
+  }
+
+  const completedTime = new Date(completedAt).getTime();
+
+  if (Number.isNaN(completedTime)) {
+    return null;
+  }
+
+  return completedTime + CHALLENGE_COOLDOWN_MS;
+}
+
+function formatCountdown(milliseconds) {
+  if (milliseconds <= 0) {
+    return "00:00:00";
+  }
+
+  const totalSeconds = Math.ceil(milliseconds / 1000);
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return [
+    String(hours).padStart(2, "0"),
+    String(minutes).padStart(2, "0"),
+    String(seconds).padStart(2, "0"),
+  ].join(":");
+}
+
 function Dashboard() {
   const navigate = useNavigate();
   const user = getUser();
@@ -25,6 +68,8 @@ function Dashboard() {
   const [challengeCompleting, setChallengeCompleting] = useState(false);
   const [challengeError, setChallengeError] = useState("");
   const [challengeMessage, setChallengeMessage] = useState("");
+  const [unlockTime, setUnlockTime] = useState(null);
+  const [countdown, setCountdown] = useState("");
 
   // --------------------------------------------------
   // LOAD DASHBOARD STATS
@@ -69,6 +114,10 @@ function Dashboard() {
       const data = await response.json();
 
       setChallenge(data);
+
+      const nextUnlockTime = getUnlockTime(data);
+
+      setUnlockTime(nextUnlockTime);
     } catch (error) {
       console.error("Challenge error:", error);
 
@@ -101,6 +150,46 @@ function Dashboard() {
   }, []);
 
   // --------------------------------------------------
+  // 24-HOUR COUNTDOWN
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (!unlockTime) {
+      setCountdown("");
+      return;
+    }
+
+    const updateCountdown = () => {
+      const remaining = unlockTime - Date.now();
+
+      if (remaining <= 0) {
+        setCountdown("00:00:00");
+
+        const token = getToken();
+
+        if (token) {
+          loadChallenge(token);
+        }
+
+        return;
+      }
+
+      setCountdown(formatCountdown(remaining));
+    };
+
+    updateCountdown();
+
+    const interval = window.setInterval(
+      updateCountdown,
+      1000
+    );
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [unlockTime]);
+
+  // --------------------------------------------------
   // BACK BUTTON
   // --------------------------------------------------
 
@@ -123,7 +212,8 @@ function Dashboard() {
       !token ||
       !challenge?.challenge?.id ||
       challenge.completed ||
-      challengeCompleting
+      challengeCompleting ||
+      (unlockTime && unlockTime > Date.now())
     ) {
       return;
     }
@@ -160,6 +250,14 @@ function Dashboard() {
 
       if (!response.ok) {
         if (response.status === 409) {
+          const completedAt =
+            data?.completion?.completed_at ||
+            new Date().toISOString();
+
+          const nextUnlock =
+            new Date(completedAt).getTime() +
+            CHALLENGE_COOLDOWN_MS;
+
           setChallenge((current) => {
             if (!current) {
               return current;
@@ -168,8 +266,14 @@ function Dashboard() {
             return {
               ...current,
               completed: true,
+              completion: {
+                ...(current.completion || {}),
+                completed_at: completedAt,
+              },
             };
           });
+
+          setUnlockTime(nextUnlock);
 
           setChallengeMessage(
             "Today's challenge has already been completed."
@@ -189,6 +293,14 @@ function Dashboard() {
       // SUCCESS
       // ------------------------------------------------
 
+      const completedAt =
+        data?.completion?.completed_at ||
+        new Date().toISOString();
+
+      const nextUnlock =
+        new Date(completedAt).getTime() +
+        CHALLENGE_COOLDOWN_MS;
+
       setChallenge((current) => {
         if (!current) {
           return current;
@@ -198,11 +310,13 @@ function Dashboard() {
           ...current,
           completed: true,
           completion: {
-            completed_at: new Date().toISOString(),
+            completed_at: completedAt,
             points: data.progress.points,
           },
         };
       });
+
+      setUnlockTime(nextUnlock);
 
       setStats((current) => ({
         ...current,
@@ -226,6 +340,10 @@ function Dashboard() {
       setChallengeCompleting(false);
     }
   };
+
+  const challengeLocked =
+    Boolean(unlockTime) &&
+    unlockTime > Date.now();
 
   // --------------------------------------------------
   // PAGE
@@ -319,59 +437,27 @@ function Dashboard() {
       <section className="dashboard-stats">
 
         <article>
-          <span>
-            🔥 STREAK
-          </span>
-
-          <strong>
-            {stats.streak}
-          </strong>
-
-          <small>
-            days
-          </small>
+          <span>🔥 STREAK</span>
+          <strong>{stats.streak}</strong>
+          <small>days</small>
         </article>
 
         <article>
-          <span>
-            ⭐ POINTS
-          </span>
-
-          <strong>
-            {stats.points}
-          </strong>
-
-          <small>
-            earned
-          </small>
+          <span>⭐ POINTS</span>
+          <strong>{stats.points}</strong>
+          <small>earned</small>
         </article>
 
         <article>
-          <span>
-            🌱 LEVEL
-          </span>
-
-          <strong>
-            {stats.level}
-          </strong>
-
-          <small>
-            Growing
-          </small>
+          <span>🌱 LEVEL</span>
+          <strong>{stats.level}</strong>
+          <small>Growing</small>
         </article>
 
         <article>
-          <span>
-            🌳 FOREST
-          </span>
-
-          <strong>
-            {stats.forest_actions}
-          </strong>
-
-          <small>
-            actions
-          </small>
+          <span>🌳 FOREST</span>
+          <strong>{stats.forest_actions}</strong>
+          <small>actions</small>
         </article>
 
       </section>
@@ -381,9 +467,7 @@ function Dashboard() {
 
         <div className="dashboard-section-heading">
 
-          <span>
-            DAILY CHALLENGE
-          </span>
+          <span>DAILY CHALLENGE</span>
 
           <h2>
             One action. Every day.
@@ -453,10 +537,15 @@ function Dashboard() {
         {!challengeLoading &&
           !challengeError &&
           challenge?.challenge && (
+
             <article
               className={`dashboard-challenge-card ${
                 challenge.completed
                   ? "challenge-completed"
+                  : ""
+              } ${
+                challengeLocked
+                  ? "challenge-locked"
                   : ""
               }`}
             >
@@ -464,7 +553,9 @@ function Dashboard() {
               <div className="challenge-icon-wrap">
 
                 <span className="challenge-icon">
-                  {challenge.challenge.icon}
+                  {challengeLocked
+                    ? "🔒"
+                    : challenge.challenge.icon}
                 </span>
 
               </div>
@@ -473,35 +564,49 @@ function Dashboard() {
 
                 <div className="challenge-meta">
 
-                  <span className="challenge-label">
-                    {challenge.challenge.category}
+                  <span
+                    className={
+                      challengeLocked
+                        ? "challenge-lock-label"
+                        : "challenge-label"
+                    }
+                  >
+                    {challengeLocked
+                      ? "NEXT CHALLENGE LOCKED"
+                      : challenge.challenge.category}
                   </span>
 
-                  <span className="challenge-points">
-                    +{challenge.challenge.points} POINTS
-                  </span>
+                  {!challengeLocked && (
+                    <span className="challenge-points">
+                      +{challenge.challenge.points} POINTS
+                    </span>
+                  )}
 
                 </div>
 
                 <h3>
-                  {challenge.challenge.title}
+                  {challengeLocked
+                    ? "Your next challenge is growing."
+                    : challenge.challenge.title}
                 </h3>
 
                 <p className="challenge-description">
-                  {challenge.challenge.description}
+                  {challengeLocked
+                    ? "You've completed today's sustainability action. Your next challenge unlocks after the 24-hour cooldown."
+                    : challenge.challenge.description}
                 </p>
 
-                <div className="challenge-action-box">
+                {!challengeLocked && (
+                  <div className="challenge-action-box">
 
-                  <span>
-                    ACTION
-                  </span>
+                    <span>ACTION</span>
 
-                  <strong>
-                    {challenge.challenge.action}
-                  </strong>
+                    <strong>
+                      {challenge.challenge.action}
+                    </strong>
 
-                </div>
+                  </div>
+                )}
 
                 {challengeMessage && (
                   <div className="challenge-success-message">
@@ -509,8 +614,32 @@ function Dashboard() {
                   </div>
                 )}
 
-                {/* COMPLETED STATE */}
-                {challenge.completed ? (
+                {/* LOCKED STATE */}
+                {challengeLocked ? (
+
+                  <div className="challenge-unlock-box">
+
+                    <span>
+                      NEXT CHALLENGE UNLOCKS IN
+                    </span>
+
+                    <div className="challenge-countdown">
+                      {countdown || "24:00:00"}
+                      <small>
+                        remaining
+                      </small>
+                    </div>
+
+                    <p className="challenge-unlock-note">
+                      Keep your progress safe. The next action
+                      becomes available automatically.
+                    </p>
+
+                  </div>
+
+                ) : challenge.completed ? (
+
+                  /* COMPLETED STATE */
                   <div className="challenge-completed-state">
 
                     <span className="challenge-check">
@@ -524,12 +653,13 @@ function Dashboard() {
                       </strong>
 
                       <small>
-                        Come back tomorrow for a new challenge.
+                        Your next challenge is unlocking now.
                       </small>
 
                     </div>
 
                   </div>
+
                 ) : (
 
                   /* ACTIVE STATE */
@@ -551,6 +681,7 @@ function Dashboard() {
                     </span>
 
                   </div>
+
                 )}
 
               </div>
@@ -565,9 +696,7 @@ function Dashboard() {
 
         <div className="dashboard-section-heading">
 
-          <span>
-            KEEP MOVING
-          </span>
+          <span>KEEP MOVING</span>
 
           <h2>
             What will you do today?
@@ -582,10 +711,7 @@ function Dashboard() {
             to="/explore"
             className="dashboard-card featured"
           >
-
-            <span>
-              🌍
-            </span>
+            <span>🌍</span>
 
             <h3>
               Calculate your impact
@@ -598,15 +724,12 @@ function Dashboard() {
             <strong>
               Start calculating →
             </strong>
-
           </Link>
 
           {/* DAILY CHALLENGES */}
           <article className="dashboard-card dashboard-card-live">
 
-            <span>
-              🎯
-            </span>
+            <span>🎯</span>
 
             <h3>
               Daily challenges
@@ -624,11 +747,12 @@ function Dashboard() {
           </article>
 
           {/* FOREST */}
-          <div className="dashboard-card">
+          <Link
+            to="/forest"
+            className="dashboard-card featured"
+          >
 
-            <span>
-              🌳
-            </span>
+            <span>🌳</span>
 
             <h3>
               My Forest
@@ -640,17 +764,15 @@ function Dashboard() {
             </p>
 
             <strong>
-              Coming next →
+              Enter your forest →
             </strong>
 
-          </div>
+          </Link>
 
           {/* POMODORO */}
           <div className="dashboard-card">
 
-            <span>
-              ⏱️
-            </span>
+            <span>⏱️</span>
 
             <h3>
               Focus with Pomodoro
