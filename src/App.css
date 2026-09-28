@@ -1378,3 +1378,35 @@ footer p {
   font-weight: 800;
   letter-spacing: 1px;
 }
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.nav-user button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #c7d1ca;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+.nav-dashboard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 13px;
+  border: 1px solid rgba(156, 255, 114, 0.35);
+  border-radius: 8px;
+  color: #9cff72;
+  background: rgba(156, 255, 114, 0.06);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nav-dashboard:hover {
+  background: rgba(156, 255, 114, 0.12);
+}
