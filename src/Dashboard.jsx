@@ -1,47 +1,203 @@
 import { useEffect, useState } from "react";
 import "./Dashboard.css";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getToken, getUser, logout } from "./auth.js";
 
+const API_URL =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:8000"
+    : "https://greenpulse-web-tc0g.onrender.com";
+
 function Dashboard() {
+  const navigate = useNavigate();
   const user = getUser();
 
   const [stats, setStats] = useState({
-  points: 0,
-  streak: 0,
-  level: 1,
-  forest_actions: 0,
-});
+    points: 0,
+    streak: 0,
+    level: 1,
+    forest_actions: 0,
+  });
 
-useEffect(() => {
-  const token = getToken();
+  const [challenge, setChallenge] = useState(null);
+  const [challengeLoading, setChallengeLoading] = useState(true);
+  const [challengeCompleting, setChallengeCompleting] = useState(false);
+  const [challengeError, setChallengeError] = useState("");
+  const [challengeMessage, setChallengeMessage] = useState("");
 
-  if (!token) {
-    logout();
-    return;
-  }
+  const loadDashboard = async (token) => {
+    const response = await fetch(
+      `${API_URL}/api/dashboard?token=${encodeURIComponent(token)}`
+    );
 
-  fetch(
-    `https://greenpulse-web-tc0g.onrender.com/api/dashboard?token=${encodeURIComponent(token)}`
-  )
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error("Failed to load dashboard");
+    if (!response.ok) {
+      throw new Error("Failed to load dashboard");
+    }
+
+    const data = await response.json();
+
+    setStats(data);
+  };
+
+  const loadChallenge = async (token) => {
+    setChallengeLoading(true);
+    setChallengeError("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/challenges/today?token=${encodeURIComponent(token)}`
+      );
+
+      if (response.status === 401) {
+        logout();
+        return;
       }
 
-      return response.json();
-    })
-    .then((data) => {
-      setStats(data);
-    })
-    .catch((error) => {
+      if (!response.ok) {
+        throw new Error("Failed to load today's challenge");
+      }
+
+      const data = await response.json();
+
+      setChallenge(data);
+    } catch (error) {
+      console.error("Challenge error:", error);
+
+      setChallengeError(
+        "We couldn't load today's challenge. Please try again."
+      );
+    } finally {
+      setChallengeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const token = getToken();
+
+    if (!token) {
+      logout();
+      return;
+    }
+
+    Promise.all([
+      loadDashboard(token),
+      loadChallenge(token),
+    ]).catch((error) => {
       console.error("Dashboard error:", error);
     });
-}, []);
+  }, []);
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
+
+  const handleCompleteChallenge = async () => {
+    const token = getToken();
+
+    if (!token || !challenge?.challenge?.id) {
+      return;
+    }
+
+    if (challenge.completed || challengeCompleting) {
+      return;
+    }
+
+    setChallengeCompleting(true);
+    setChallengeError("");
+    setChallengeMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/challenges/complete`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token,
+            challenge_id: challenge.challenge.id,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          setChallenge({
+            ...challenge,
+            completed: true,
+          });
+
+          setChallengeMessage(
+            "Today's challenge has already been completed."
+          );
+
+          await loadDashboard(token);
+
+          return;
+        }
+
+        throw new Error(
+          data?.detail || "Unable to complete challenge"
+        );
+      }
+
+      setChallenge({
+        ...challenge,
+        completed: true,
+        completion: {
+          completed_at: new Date().toISOString(),
+          points: data.progress.points,
+        },
+      });
+
+      setStats((current) => ({
+        ...current,
+        points: data.progress.points,
+        streak: data.progress.streak,
+        level: data.progress.level,
+        forest_actions: data.progress.forest_actions,
+      }));
+
+      setChallengeMessage(
+        `Challenge completed! +${data.challenge.points} points 🌱`
+      );
+    } catch (error) {
+      console.error("Challenge completion error:", error);
+
+      setChallengeError(
+        error.message ||
+          "Something went wrong while completing the challenge."
+      );
+    } finally {
+      setChallengeCompleting(false);
+    }
+  };
 
   return (
     <main className="dashboard-page">
       <header className="dashboard-topbar">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="dashboard-back-button"
+          aria-label="Go back to the previous page"
+        >
+          ← Back to Home
+        </button>
+
         <Link to="/" className="dashboard-brand">
           <span>🌱</span>
           GREEN<span>PULSE</span>
@@ -54,7 +210,9 @@ useEffect(() => {
             <span className="dashboard-admin">ADMIN</span>
           )}
 
-          <button onClick={logout}>Log out</button>
+          <button type="button" onClick={logout}>
+            Log out
+          </button>
         </div>
       </header>
 
@@ -109,6 +267,136 @@ useEffect(() => {
         </article>
       </section>
 
+      {/* ======================================================
+          DAILY CHALLENGE
+          ====================================================== */}
+
+      <section className="dashboard-challenge-section">
+        <div className="dashboard-section-heading">
+          <span>DAILY CHALLENGE</span>
+          <h2>One action. Every day.</h2>
+        </div>
+
+        {challengeLoading ? (
+          <article className="dashboard-challenge-card dashboard-challenge-loading">
+            <div className="challenge-loading-icon">🌱</div>
+
+            <div>
+              <span className="challenge-loading-line"></span>
+              <span className="challenge-loading-line short"></span>
+              <span className="challenge-loading-line"></span>
+            </div>
+          </article>
+        ) : challengeError ? (
+          <article className="dashboard-challenge-card dashboard-challenge-error">
+            <div className="challenge-icon">⚠️</div>
+
+            <div className="challenge-content">
+              <span className="challenge-label">
+                SOMETHING WENT WRONG
+              </span>
+
+              <h3>Challenge unavailable</h3>
+
+              <p>{challengeError}</p>
+
+              <button
+                type="button"
+                className="challenge-action-button"
+                onClick={() => {
+                  const token = getToken();
+
+                  if (token) {
+                    loadChallenge(token);
+                  }
+                }}
+              >
+                Try again
+              </button>
+            </div>
+          </article>
+        ) : challenge?.challenge ? (
+          <article
+            className={`dashboard-challenge-card ${
+              challenge.completed
+                ? "challenge-completed"
+                : ""
+            }`}
+          >
+            <div className="challenge-icon-wrap">
+              <span className="challenge-icon">
+                {challenge.challenge.icon}
+              </span>
+            </div>
+
+            <div className="challenge-content">
+              <div className="challenge-meta">
+                <span className="challenge-label">
+                  {challenge.challenge.category}
+                </span>
+
+                <span className="challenge-points">
+                  +{challenge.challenge.points} POINTS
+                </span>
+              </div>
+
+              <h3>{challenge.challenge.title}</h3>
+
+              <p className="challenge-description">
+                {challenge.challenge.description}
+              </p>
+
+              <div className="challenge-action-box">
+                <span>ACTION</span>
+                <strong>{challenge.challenge.action}</strong>
+              </div>
+
+              {challengeMessage && (
+                <div className="challenge-success-message">
+                  ✓ {challengeMessage}
+                </div>
+              )}
+
+              {challenge.completed ? (
+                <div className="challenge-completed-state">
+                  <span className="challenge-check">
+                    ✓
+                  </span>
+
+                  <div>
+                    <strong>Completed today</strong>
+                    <small>
+                      Come back tomorrow for a new challenge.
+                    </small>
+                  </div>
+                </div>
+              ) : (
+                <div className="challenge-controls">
+                  <button
+                    type="button"
+                    className="challenge-action-button"
+                    onClick={handleCompleteChallenge}
+                    disabled={challengeCompleting}
+                  >
+                    {challengeCompleting
+                      ? "Saving..."
+                      : "I completed this →"}
+                  </button>
+
+                  <span className="challenge-honesty">
+                    Complete only if you genuinely did it.
+                  </span>
+                </div>
+              )}
+            </div>
+          </article>
+        ) : null}
+      </section>
+
+      {/* ======================================================
+          ACTIONS
+          ====================================================== */}
+
       <section className="dashboard-actions">
         <div className="dashboard-section-heading">
           <span>KEEP MOVING</span>
@@ -116,40 +404,65 @@ useEffect(() => {
         </div>
 
         <div className="dashboard-grid">
-          <Link to="/explore" className="dashboard-card featured">
+          <Link
+            to="/explore"
+            className="dashboard-card featured"
+          >
             <span>🌍</span>
+
             <h3>Calculate your impact</h3>
+
             <p>
               Measure the footprint of your everyday choices.
             </p>
-            <strong>Start calculating →</strong>
+
+            <strong>
+              Start calculating →
+            </strong>
           </Link>
 
-          <div className="dashboard-card">
+          <article className="dashboard-card dashboard-card-live">
             <span>🎯</span>
+
             <h3>Daily challenges</h3>
+
             <p>
-              Small actions. Consistent habits. Real progress.
+              Complete one practical sustainability action every
+              day and grow your progress.
             </p>
-            <strong>Coming next →</strong>
-          </div>
+
+            <strong>
+              Today's challenge ↑
+            </strong>
+          </article>
 
           <div className="dashboard-card">
             <span>🌳</span>
+
             <h3>My Forest</h3>
+
             <p>
-              Watch your actions grow into your own digital ecosystem.
+              Watch your actions grow into your own digital
+              ecosystem.
             </p>
-            <strong>Coming next →</strong>
+
+            <strong>
+              Coming next →
+            </strong>
           </div>
 
           <div className="dashboard-card">
             <span>⏱️</span>
+
             <h3>Focus with Pomodoro</h3>
+
             <p>
               Turn focused time into another part of your journey.
             </p>
-            <strong>Coming next →</strong>
+
+            <strong>
+              Coming next →
+            </strong>
           </div>
         </div>
       </section>
