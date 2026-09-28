@@ -606,3 +606,105 @@
     min-height: auto;
   }
 }
+/* =========================================================
+   CHALLENGE LOCKED / UNLOCK COUNTDOWN
+   ========================================================= */
+
+.dashboard-challenge-card.challenge-locked {
+  border-color: rgba(255, 255, 255, 0.09);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(17, 31, 22, 0.82),
+      rgba(7, 18, 11, 0.96)
+    );
+}
+
+.challenge-locked .challenge-icon-wrap {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.challenge-locked .challenge-icon {
+  opacity: 0.7;
+}
+
+.challenge-lock-label {
+  color: #89998e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+}
+
+.challenge-unlock-box {
+  margin-top: 24px;
+  padding: 20px 22px;
+
+  border: 1px solid rgba(156, 255, 114, 0.12);
+  border-radius: 16px;
+
+  background: rgba(156, 255, 114, 0.035);
+}
+
+.challenge-unlock-box > span {
+  display: block;
+
+  color: #73857a;
+
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+}
+
+.challenge-countdown {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+
+  margin-top: 8px;
+
+  color: #9cff72;
+
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.challenge-countdown small {
+  color: #819188;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.challenge-unlock-note {
+  margin: 8px 0 0;
+
+  color: #718278;
+
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.challenge-locked-button {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  color: #68776e;
+  cursor: not-allowed;
+}
+
+.challenge-locked-button:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 480px) {
+  .challenge-unlock-box {
+    padding: 17px;
+  }
+
+  .challenge-countdown {
+    font-size: 30px;
+  }
+}
