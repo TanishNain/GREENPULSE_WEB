@@ -33,9 +33,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://greenpulse-75vr7v1hf-green-pulse3.vercel.app",
     ],
-    allow_credentials=False,
+    allow_origin_regex=r"https://([a-zA-Z0-9-]+\.)?vercel\.app$",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
