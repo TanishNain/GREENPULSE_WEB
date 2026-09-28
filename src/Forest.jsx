@@ -1,11 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 import "./Forest.css";
 import { getToken, logout } from "./auth.js";
+
 const API_URL =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1"
     ? "http://127.0.0.1:8000"
     : "https://greenpulse-web-tc0g.onrender.com";
+
+/* =========================================================
+   SAFE HELPERS
+   ========================================================= */
+
+function safeText(value, fallback = "") {
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+
+  if (value && typeof value === "object") {
+    return (
+      value.name ??
+      value.title ??
+      value.label ??
+      value.description ??
+      fallback
+    );
+  }
+
+  return fallback;
+}
 
 /* =========================================================
    TREE
@@ -188,33 +211,14 @@ function Butterflies() {
 function Flowers() {
   return (
     <div className="forest-flowers" aria-hidden="true">
-      <span>
-        <i />
-        <i />
-        <i />
-        <i />
-      </span>
-
-      <span>
-        <i />
-        <i />
-        <i />
-        <i />
-      </span>
-
-      <span>
-        <i />
-        <i />
-        <i />
-        <i />
-      </span>
-
-      <span>
-        <i />
-        <i />
-        <i />
-        <i />
-      </span>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <span key={index}>
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+      ))}
     </div>
   );
 }
@@ -228,7 +232,7 @@ function GroundPlants({ dense = false }) {
 
   return (
     <div className="forest-plants" aria-hidden="true">
-      {Array.from({ length: count }).map((_, index) => (
+      {Array.from({ length: count }, (_, index) => (
         <span
           key={index}
           style={{
@@ -256,86 +260,104 @@ export default function Forest() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const token = getToken();
-
-async function loadForest() {
-  try {
-    setLoading(true);
-    setError("");
-
-    const token = getToken();
-
-    if (!token) {
-      logout();
-      return;
-    }
-
-    const forestResponse = await fetch(
-      `${API_URL}/api/forest?token=${encodeURIComponent(token)}`
-    );
-
-    if (forestResponse.status === 401) {
-      logout();
-      return;
-    }
-
-    if (!forestResponse.ok) {
-      throw new Error(
-        `Forest API failed with ${forestResponse.status}`
-      );
-    }
-
-    const forestData = await forestResponse.json();
-    setForest(forestData);
-
-    // Weather and season are optional atmosphere data.
-    // They must NEVER prevent the forest itself from loading.
+  async function loadForest() {
     try {
-      const weatherResponse = await fetch(
-        `${API_URL}/api/forest/weather`
+      setLoading(true);
+      setError("");
+
+      const token = getToken();
+
+      if (!token) {
+        logout();
+        return;
+      }
+
+      /* =====================================================
+         FOREST DATA — REQUIRED
+         ===================================================== */
+
+      const forestResponse = await fetch(
+        `${API_URL}/api/forest?token=${encodeURIComponent(token)}`
       );
 
-      if (weatherResponse.ok) {
-        setWeather(await weatherResponse.json());
-      } else {
-        console.warn(
-          "Weather unavailable:",
-          weatherResponse.status
+      if (forestResponse.status === 401) {
+        logout();
+        return;
+      }
+
+      if (!forestResponse.ok) {
+        throw new Error(
+          `Forest API failed with ${forestResponse.status}`
         );
       }
-    } catch (weatherError) {
-      console.warn(
-        "Weather request failed:",
-        weatherError
-      );
-    }
 
-    try {
-      const seasonResponse = await fetch(
-        `${API_URL}/api/forest/season`
-      );
+      const forestData = await forestResponse.json();
 
-      if (seasonResponse.ok) {
-        setSeason(await seasonResponse.json());
-      } else {
-        console.warn(
-          "Season unavailable:",
-          seasonResponse.status
+      setForest(forestData);
+
+      /* =====================================================
+         WEATHER — OPTIONAL
+         ===================================================== */
+
+      try {
+        const weatherResponse = await fetch(
+          `${API_URL}/api/forest/weather`
         );
+
+        if (weatherResponse.ok) {
+          const weatherData = await weatherResponse.json();
+          setWeather(weatherData);
+        } else {
+          console.warn(
+            "Weather unavailable:",
+            weatherResponse.status
+          );
+          setWeather(null);
+        }
+      } catch (weatherError) {
+        console.warn(
+          "Weather request failed:",
+          weatherError
+        );
+        setWeather(null);
       }
-    } catch (seasonError) {
-      console.warn(
-        "Season request failed:",
-        seasonError
+
+      /* =====================================================
+         SEASON — OPTIONAL
+         ===================================================== */
+
+      try {
+        const seasonResponse = await fetch(
+          `${API_URL}/api/forest/season`
+        );
+
+        if (seasonResponse.ok) {
+          const seasonData = await seasonResponse.json();
+          setSeason(seasonData);
+        } else {
+          console.warn(
+            "Season unavailable:",
+            seasonResponse.status
+          );
+          setSeason(null);
+        }
+      } catch (seasonError) {
+        console.warn(
+          "Season request failed:",
+          seasonError
+        );
+        setSeason(null);
+      }
+    } catch (err) {
+      console.error("Forest loading failed:", err);
+
+      setError(
+        "Your forest could not be loaded right now."
       );
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error("Forest loading failed:", err);
-    setError("Your forest could not be loaded right now.");
-  } finally {
-    setLoading(false);
   }
-}
 
   useEffect(() => {
     loadForest();
@@ -352,11 +374,24 @@ async function loadForest() {
       0
   );
 
-  const stage =
+  /* =======================================================
+     STAGE — DEFENSIVE
+     ======================================================= */
+
+  const rawStage =
     forest?.stage ??
     forest?.forest_stage ??
     forest?.current_stage ??
     "Seedling";
+
+  const stage =
+    typeof rawStage === "object"
+      ? safeText(rawStage, "Seedling")
+      : safeText(rawStage, "Seedling");
+
+  /* =======================================================
+     UNLOCKED FEATURES
+     ======================================================= */
 
   const unlocked = useMemo(() => {
     const features =
@@ -369,15 +404,23 @@ async function loadForest() {
   }, [forest]);
 
   const hasFeature = (name) =>
-    unlocked.some((item) =>
-      String(
+    unlocked.some((item) => {
+      const value =
         typeof item === "object"
-          ? item.name ?? item.id ?? item.title ?? ""
-          : item
-      )
+          ? item?.name ??
+            item?.id ??
+            item?.title ??
+            ""
+          : item;
+
+      return String(value)
         .toLowerCase()
-        .includes(name.toLowerCase())
-    );
+        .includes(name.toLowerCase());
+    });
+
+  /* =======================================================
+     WEATHER
+     ======================================================= */
 
   const weatherCondition = String(
     weather?.condition ??
@@ -405,7 +448,8 @@ async function loadForest() {
 
   const isNight =
     weather?.is_day === false ||
-    String(weather?.day_night ?? "").toLowerCase() === "night";
+    String(weather?.day_night ?? "").toLowerCase() ===
+      "night";
 
   /* =======================================================
      MILESTONES
@@ -434,8 +478,7 @@ async function loadForest() {
     hasFeature("stream") || actions >= 50;
 
   const denseForest =
-    actions >= 21 ||
-    deepForest;
+    actions >= 21 || deepForest;
 
   const thrivingForest =
     actions >= 60 ||
@@ -552,6 +595,17 @@ async function loadForest() {
     .filter(Boolean)
     .join(" ");
 
+  const displayWeather =
+    weather?.condition ??
+    weather?.conditions ??
+    weather?.weather ??
+    "Clear";
+
+  const displaySeason =
+    season?.season ??
+    forest?.season ??
+    "Monsoon";
+
   return (
     <main className={pageClasses}>
       {/* ===================================================
@@ -592,13 +646,26 @@ async function loadForest() {
 
       {birdsUnlocked && (
         <>
-          <Bird delay="0s" top="22%" duration="24s" />
-          <Bird delay="7s" top="31%" duration="28s" />
+          <Bird
+            delay="0s"
+            top="22%"
+            duration="24s"
+          />
+
+          <Bird
+            delay="7s"
+            top="31%"
+            duration="28s"
+          />
         </>
       )}
 
       {wildlifeUnlocked && (
-        <Bird delay="13s" top="17%" duration="31s" />
+        <Bird
+          delay="13s"
+          top="17%"
+          duration="31s"
+        />
       )}
 
       {/* ===================================================
@@ -650,15 +717,9 @@ async function loadForest() {
           </div>
 
           <div>
-            <strong>
-              {weather?.condition ?? "Clear"}
-            </strong>
+            <strong>{safeText(displayWeather, "Clear")}</strong>
 
-            <small>
-              {season?.season ??
-                forest?.season ??
-                "Monsoon"}
-            </small>
+            <small>{safeText(displaySeason, "Monsoon")}</small>
           </div>
         </div>
       </header>
@@ -669,6 +730,7 @@ async function loadForest() {
 
       <section className="forest-world">
         {/* BACKGROUND */}
+
         <div className="forest-background">
           <div className="forest-hill forest-hill-back" />
           <div className="forest-hill forest-hill-middle" />
@@ -700,6 +762,7 @@ async function loadForest() {
         </div>
 
         {/* GROUND */}
+
         <div className="forest-ground">
           <div className="forest-ground-shadow" />
           <div className="forest-path" />
@@ -739,6 +802,7 @@ async function loadForest() {
         </div>
 
         {/* MIDGROUND */}
+
         <div className="forest-midground">
           <Tree
             className="tree-main-one"
@@ -776,6 +840,7 @@ async function loadForest() {
         </div>
 
         {/* CENTER */}
+
         <div className="forest-center">
           <div className="forest-center-glow" />
 
@@ -795,6 +860,7 @@ async function loadForest() {
         </div>
 
         {/* FOREGROUND */}
+
         <div className="forest-foreground">
           <div className="foreground-tree foreground-tree-left">
             <span />
@@ -812,7 +878,8 @@ async function loadForest() {
           <div className="foreground-leaves foreground-leaves-right" />
         </div>
 
-        {/* NIGHT FIREFLY GLOW */}
+        {/* NIGHT GLOW */}
+
         {isNight && (
           <div className="forest-night-glow" />
         )}
@@ -852,7 +919,8 @@ async function loadForest() {
               style={{
                 width: `${Math.min(
                   100,
-                  (actions % 20) * 5 || (actions > 0 ? 5 : 0)
+                  (actions % 20) * 5 ||
+                    (actions > 0 ? 5 : 0)
                 )}%`,
               }}
             />
@@ -876,9 +944,13 @@ async function loadForest() {
         </div>
 
         <div className="forest-unlock-list">
+          {/* BIRDS */}
+
           <div
             className={
-              birdsUnlocked ? "unlocked" : "locked"
+              birdsUnlocked
+                ? "unlocked"
+                : "locked"
             }
           >
             <span className="unlock-art unlock-bird">
@@ -896,14 +968,16 @@ async function loadForest() {
               </small>
             </div>
 
-            {birdsUnlocked && (
-              <b>✓</b>
-            )}
+            {birdsUnlocked && <b>✓</b>}
           </div>
+
+          {/* INSECTS */}
 
           <div
             className={
-              insectsUnlocked ? "unlocked" : "locked"
+              insectsUnlocked
+                ? "unlocked"
+                : "locked"
             }
           >
             <span className="unlock-art unlock-insect">
@@ -922,14 +996,16 @@ async function loadForest() {
               </small>
             </div>
 
-            {insectsUnlocked && (
-              <b>✓</b>
-            )}
+            {insectsUnlocked && <b>✓</b>}
           </div>
+
+          {/* WILDLIFE */}
 
           <div
             className={
-              wildlifeUnlocked ? "unlocked" : "locked"
+              wildlifeUnlocked
+                ? "unlocked"
+                : "locked"
             }
           >
             <span className="unlock-art unlock-wildlife">
@@ -946,14 +1022,16 @@ async function loadForest() {
               </small>
             </div>
 
-            {wildlifeUnlocked && (
-              <b>✓</b>
-            )}
+            {wildlifeUnlocked && <b>✓</b>}
           </div>
+
+          {/* STREAM */}
 
           <div
             className={
-              streamUnlocked ? "unlocked" : "locked"
+              streamUnlocked
+                ? "unlocked"
+                : "locked"
             }
           >
             <span className="unlock-art unlock-stream">
@@ -972,9 +1050,7 @@ async function loadForest() {
               </small>
             </div>
 
-            {streamUnlocked && (
-              <b>✓</b>
-            )}
+            {streamUnlocked && <b>✓</b>}
           </div>
         </div>
       </section>
