@@ -5,6 +5,7 @@ import Reviews from "./Reviews.jsx";
 import Auth from "./Auth.jsx";
 import { getUser, logout } from "./auth.js";
 import Dashboard from "./Dashboard.jsx";
+import Forest from "./Forest.jsx";
 
 
 function App() {
@@ -394,6 +395,7 @@ function AppRouter() {
       <Route path="/reviews" element={<Reviews />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/forest" element={<Forest />} />
     </Routes>
   );
 }
