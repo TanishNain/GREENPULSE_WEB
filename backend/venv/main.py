@@ -1,7 +1,5 @@
 from fastapi import FastAPI, HTTPException
-
 from fastapi.middleware.cors import CORSMiddleware
-
 from pydantic import BaseModel, Field
 
 import hashlib
@@ -51,9 +49,13 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "greenpulse.db")
 
-# If DATABASE_URL exists, production uses Supabase PostgreSQL.
-# If it does not exist, local development continues using SQLite.
+# Production:
+# If DATABASE_URL exists, GreenPulse uses Supabase PostgreSQL.
+#
+# Local development:
+# If DATABASE_URL does not exist, GreenPulse uses SQLite.
 DATABASE_URL = os.getenv("DATABASE_URL")
+
 print("DATABASE_URL PRESENT:", bool(DATABASE_URL))
 
 
@@ -61,14 +63,15 @@ class PostgresConnection:
     """
     Small compatibility wrapper so the existing GreenPulse
     backend can continue using connection.execute(...).
+
+    Existing GreenPulse SQL uses SQLite-style ? placeholders.
+    PostgreSQL uses %s, so placeholders are translated here.
     """
 
     def __init__(self, connection):
         self.connection = connection
 
     def execute(self, sql, params=None):
-        # Existing GreenPulse SQL uses SQLite's ? placeholders.
-        # PostgreSQL uses %s, so translate them only for PostgreSQL.
         sql = sql.replace("?", "%s")
 
         cursor = self.connection.cursor()
@@ -97,6 +100,7 @@ def get_db():
 
     connection = sqlite3.connect(DB_FILE)
     connection.row_factory = sqlite3.Row
+
     return connection
 
 
@@ -279,7 +283,9 @@ def init_db():
     }
 
     for column, definition in user_columns:
+
         if column not in existing_user_columns:
+
             connection.execute(
                 f"ALTER TABLE users ADD COLUMN {column} {definition}"
             )
@@ -324,6 +330,7 @@ def init_db():
     }
 
     if "owner_token" not in existing_review_columns:
+
         connection.execute(
             """
             ALTER TABLE reviews
@@ -413,11 +420,18 @@ def register(data: RegisterRequest):
             ),
         )
 
-        user_id = cursor.fetchone()[0]
+        returned_row = cursor.fetchone()
+
+        # PostgreSQL with dict_row returns {"id": ...}
+        # SQLite returns {"id": ...} / Row.
+        user_id = returned_row["id"]
 
         connection.commit()
 
-    except (sqlite3.IntegrityError, PostgresIntegrityError):
+    except (
+        sqlite3.IntegrityError,
+        PostgresIntegrityError,
+    ):
 
         connection.close()
 
@@ -463,6 +477,7 @@ def login(data: LoginRequest):
     ).fetchone()
 
     if not user:
+
         connection.close()
 
         raise HTTPException(
@@ -474,6 +489,7 @@ def login(data: LoginRequest):
         data.password,
         user["password_hash"],
     ):
+
         connection.close()
 
         raise HTTPException(
@@ -615,26 +631,38 @@ def create_review(data: Review):
 
     connection = get_db()
 
-    cursor = connection.execute(
-        """
-        INSERT INTO reviews
-            (name, rating, review, created_at, owner_token)
-        VALUES
-            (?, ?, ?, ?, ?)
-        RETURNING id
-        """,
-        (
-            name,
-            data.rating,
-            review_text,
-            created_at,
-            owner_token,
-        ),
-    )
+    try:
 
-    review_id = cursor.fetchone()[0]
+        cursor = connection.execute(
+            """
+            INSERT INTO reviews
+                (name, rating, review, created_at, owner_token)
+            VALUES
+                (?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (
+                name,
+                data.rating,
+                review_text,
+                created_at,
+                owner_token,
+            ),
+        )
 
-    connection.commit()
+        returned_row = cursor.fetchone()
+
+        # PostgreSQL with dict_row returns {"id": ...}
+        # SQLite returns {"id": ...} / Row.
+        review_id = returned_row["id"]
+
+        connection.commit()
+
+    except Exception:
+
+        connection.close()
+        raise
+
     connection.close()
 
     return {
@@ -722,6 +750,7 @@ def update_review(
     ).fetchone()
 
     if not row:
+
         connection.close()
 
         raise HTTPException(
@@ -780,6 +809,7 @@ def delete_review(
     ).fetchone()
 
     if not row:
+
         connection.close()
 
         raise HTTPException(
@@ -831,6 +861,7 @@ def dashboard(token: str):
     connection.close()
 
     if not stats:
+
         raise HTTPException(
             status_code=404,
             detail="User account not found",
@@ -843,4 +874,3 @@ def dashboard(token: str):
         "level": stats["level"],
         "forest_actions": stats["forest_actions"],
     }
-
