@@ -1,29 +1,27 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-
-import hashlib
 import os
-import secrets
 import sqlite3
+import hashlib
+import secrets
+import json
+import urllib.parse
+import urllib.request
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.rows import dict_row
-from psycopg.errors import IntegrityError as PostgresIntegrityError
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 
 # ============================================================
-# APP
+# GREEN PULSE — BACKEND
 # ============================================================
 
-app = FastAPI(
-    title="GreenPulse API",
-    description="Backend API for the GreenPulse website",
-    version="1.0.0",
-)
+app = FastAPI(title="GreenPulse API")
 
 
 # ============================================================
@@ -35,58 +33,40 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://greenpulse-75vr7v1hf-green-pulse3.vercel.app",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
 # ============================================================
-# DATABASE
+# DATABASE CONFIGURATION
 # ============================================================
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "greenpulse.db")
-
-# Production:
-# DATABASE_URL -> Supabase PostgreSQL
-#
-# Local development:
-# No DATABASE_URL -> SQLite
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 print("DATABASE_URL PRESENT:", bool(DATABASE_URL))
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SQLITE_DB = os.path.join(BASE_DIR, "greenpulse.db")
+
 
 class PostgresConnection:
-    """
-    Compatibility wrapper allowing the existing GreenPulse
-    backend to continue using SQLite-style ? placeholders.
-
-    SQLite:
-        ?
-
-    PostgreSQL:
-        %s
-    """
+    # Small compatibility wrapper so existing SQLite-style
+    # SQL can continue using ? placeholders with PostgreSQL.
 
     def __init__(self, connection):
         self.connection = connection
 
-    def execute(self, sql, params=None):
-        sql = sql.replace("?", "%s")
+    def execute(self, query, params=()):
+        query = query.replace("?", "%s")
+        return self.connection.execute(query, params)
 
-        cursor = self.connection.cursor()
-
-        if params is None:
-            cursor.execute(sql)
-        else:
-            cursor.execute(sql, params)
-
-        return cursor
+    def executemany(self, query, params_list):
+        query = query.replace("?", "%s")
+        return self.connection.executemany(query, params_list)
 
     def commit(self):
         self.connection.commit()
@@ -99,15 +79,20 @@ class PostgresConnection:
 
 
 def get_db():
+    # Supabase PostgreSQL is PRIMARY whenever DATABASE_URL exists.
+    # SQLite remains the local fallback/reserve database.
+
     if DATABASE_URL:
         connection = psycopg.connect(
             DATABASE_URL,
             row_factory=dict_row,
         )
-
         return PostgresConnection(connection)
 
-    connection = sqlite3.connect(DB_FILE)
+    connection = sqlite3.connect(
+        SQLITE_DB,
+        check_same_thread=False,
+    )
 
     connection.row_factory = sqlite3.Row
 
@@ -115,32 +100,164 @@ def get_db():
 
 
 # ============================================================
-# TIME
+# INDIA TIME
 # ============================================================
 
-INDIA_TIMEZONE = ZoneInfo("Asia/Kolkata")
+INDIA_TZ = ZoneInfo("Asia/Kolkata")
 
 
-def get_india_now():
-    """
-    GreenPulse challenge dates are based on Indian Standard Time,
-    not Render's server timezone.
-    """
-    return datetime.now(INDIA_TIMEZONE)
+def india_now():
+    return datetime.now(INDIA_TZ)
 
 
-def get_today_date():
-    return get_india_now().date().isoformat()
+def india_now_iso():
+    return india_now().isoformat()
+
+
+def india_today():
+    return india_now().date().isoformat()
 
 
 # ============================================================
-# PASSWORD SECURITY
+# SEASONS
+# ============================================================
+
+SEASONS = [
+    {
+        "id": "spring",
+        "name": "Spring",
+        "icon": "🌸",
+        "description": (
+            "Fresh growth, gentle sunlight and new life "
+            "begin to appear across the forest."
+        ),
+        "months": [2, 3],
+    },
+    {
+        "id": "summer",
+        "name": "Summer",
+        "icon": "☀️",
+        "description": (
+            "Longer days bring brighter light, warmer air "
+            "and a fuller green canopy."
+        ),
+        "months": [4, 5, 6],
+    },
+    {
+        "id": "monsoon",
+        "name": "Monsoon",
+        "icon": "🌧️",
+        "description": (
+            "Rain feeds the forest, deepens the greens and "
+            "brings a richer living atmosphere."
+        ),
+        "months": [7, 8, 9],
+    },
+    {
+        "id": "autumn",
+        "name": "Autumn",
+        "icon": "🍂",
+        "description": (
+            "The rains ease and the forest settles into "
+            "warmer, earthy tones."
+        ),
+        "months": [10, 11],
+    },
+    {
+        "id": "winter",
+        "name": "Winter",
+        "icon": "❄️",
+        "description": (
+            "Cooler air, softer light and morning mist give "
+            "the forest a calm winter character."
+        ),
+        "months": [12, 1],
+    },
+]
+
+
+def get_current_season(current_date=None):
+    # Returns the current Indian seasonal environment.
+    #
+    # Seasons are broad environmental phases rather than
+    # strict meteorological classifications. Real weather
+    # controls the actual daily atmosphere.
+
+    if current_date is None:
+        current_date = india_now().date()
+
+    month = current_date.month
+
+    for season in SEASONS:
+        if month in season["months"]:
+            return season
+
+    return SEASONS[0]
+
+
+def get_season_progress(current_date=None):
+    # Returns approximate progress through the current season.
+    #
+    # This is visual metadata for the Forest.
+    # It does not affect points, badges or user progression.
+
+    if current_date is None:
+        current_date = india_now().date()
+
+    year = current_date.year
+    month = current_date.month
+
+    if month == 1:
+        start = datetime(year, 1, 1).date()
+        end = datetime(year, 1, 31).date()
+
+    elif month in (2, 3):
+        start = datetime(year, 2, 1).date()
+        end = datetime(year, 3, 31).date()
+
+    elif month in (4, 5, 6):
+        start = datetime(year, 4, 1).date()
+        end = datetime(year, 6, 30).date()
+
+    elif month in (7, 8, 9):
+        start = datetime(year, 7, 1).date()
+        end = datetime(year, 9, 30).date()
+
+    elif month in (10, 11):
+        start = datetime(year, 10, 1).date()
+        end = datetime(year, 11, 30).date()
+
+    else:
+        start = datetime(year, 12, 1).date()
+        end = datetime(year + 1, 1, 31).date()
+
+    total_days = max(
+        1,
+        (end - start).days + 1,
+    )
+
+    elapsed_days = (
+        current_date - start
+    ).days + 1
+
+    progress = (
+        elapsed_days / total_days
+    ) * 100
+
+    return max(
+        0,
+        min(100, round(progress)),
+    )
+
+
+# ============================================================
+# PASSWORD HASHING
 # ============================================================
 
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
 
-    password_hash = hashlib.scrypt(
+    derived = hashlib.scrypt(
         password.encode("utf-8"),
         salt=salt,
         n=16384,
@@ -148,17 +265,24 @@ def hash_password(password: str) -> str:
         p=1,
     )
 
-    return salt.hex() + ":" + password_hash.hex()
+    return (
+        "scrypt$"
+        + salt.hex()
+        + "$"
+        + derived.hex()
+    )
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
     try:
-        salt_hex, hash_hex = stored_hash.split(":")
+        algorithm, salt_hex, hash_hex = stored_hash.split("$")
+
+        if algorithm != "scrypt":
+            return False
 
         salt = bytes.fromhex(salt_hex)
-        expected_hash = bytes.fromhex(hash_hex)
 
-        actual_hash = hashlib.scrypt(
+        derived = hashlib.scrypt(
             password.encode("utf-8"),
             salt=salt,
             n=16384,
@@ -167,51 +291,12 @@ def verify_password(password: str, stored_hash: str) -> bool:
         )
 
         return secrets.compare_digest(
-            actual_hash,
-            expected_hash,
+            derived.hex(),
+            hash_hex,
         )
 
-    except (ValueError, TypeError):
+    except Exception:
         return False
-
-
-# ============================================================
-# CURRENT USER
-# ============================================================
-
-def get_current_user(token: str):
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication token is required",
-        )
-
-    connection = get_db()
-
-    try:
-        user = connection.execute(
-            """
-            SELECT
-                users.id,
-                users.username,
-                users.role
-            FROM sessions
-            JOIN users
-                ON users.id = sessions.user_id
-            WHERE sessions.token = ?
-            """,
-            (token,),
-        ).fetchone()
-    finally:
-        connection.close()
-
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired session",
-        )
-
-    return user
 
 
 # ============================================================
@@ -219,199 +304,113 @@ def get_current_user(token: str):
 # ============================================================
 
 def init_db():
-
-    # --------------------------------------------------------
-    # SUPABASE / POSTGRESQL
-    # --------------------------------------------------------
-
-    if DATABASE_URL:
-        connection = get_db()
-
-        try:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                    username TEXT NOT NULL UNIQUE,
-                    password_hash TEXT NOT NULL,
-                    role TEXT NOT NULL DEFAULT 'user'
-                        CHECK(role IN ('user', 'admin')),
-                    created_at TEXT NOT NULL,
-                    points INTEGER NOT NULL DEFAULT 0,
-                    streak INTEGER NOT NULL DEFAULT 0,
-                    level INTEGER NOT NULL DEFAULT 1,
-                    forest_actions INTEGER NOT NULL DEFAULT 0
-                )
-                """
-            )
-
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS sessions (
-                    token TEXT PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
-                )
-                """
-            )
-
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS reviews (
-                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    rating INTEGER NOT NULL
-                        CHECK(rating >= 1 AND rating <= 5),
-                    review TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    owner_token TEXT
-                )
-                """
-            )
-
-            # ------------------------------------------------
-            # DAILY CHALLENGES
-            # ------------------------------------------------
-
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS challenge_completions (
-                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    challenge_date TEXT NOT NULL,
-                    challenge_id TEXT NOT NULL,
-                    category TEXT NOT NULL,
-                    points INTEGER NOT NULL,
-                    completed_at TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(id),
-                    UNIQUE(user_id, challenge_date)
-                )
-                """
-            )
-
-            connection.commit()
-
-        finally:
-            connection.close()
-
-        return
-
-    # --------------------------------------------------------
-    # LOCAL SQLITE
-    # --------------------------------------------------------
-
-    connection = get_db()
+    db = get_db()
 
     try:
-        # ----------------------------------------------------
-        # USERS
-        # ----------------------------------------------------
-
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'user'
-                    CHECK(role IN ('user', 'admin')),
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-
-        user_columns = [
-            ("points", "INTEGER NOT NULL DEFAULT 0"),
-            ("streak", "INTEGER NOT NULL DEFAULT 0"),
-            ("level", "INTEGER NOT NULL DEFAULT 1"),
-            ("forest_actions", "INTEGER NOT NULL DEFAULT 0"),
-        ]
-
-        existing_user_columns = {
-            column["name"]
-            for column in connection.execute(
-                "PRAGMA table_info(users)"
-            ).fetchall()
-        }
-
-        for column, definition in user_columns:
-            if column not in existing_user_columns:
-                connection.execute(
-                    f"ALTER TABLE users ADD COLUMN {column} {definition}"
-                )
-
-        # ----------------------------------------------------
-        # SESSIONS
-        # ----------------------------------------------------
-
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sessions (
-                token TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-            """
-        )
-
-        # ----------------------------------------------------
-        # REVIEWS
-        # ----------------------------------------------------
-
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reviews (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                rating INTEGER NOT NULL
-                    CHECK(rating >= 1 AND rating <= 5),
-                review TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-
-        existing_review_columns = {
-            column["name"]
-            for column in connection.execute(
-                "PRAGMA table_info(reviews)"
-            ).fetchall()
-        }
-
-        if "owner_token" not in existing_review_columns:
-            connection.execute(
-                """
-                ALTER TABLE reviews
-                ADD COLUMN owner_token TEXT
-                """
+        if DATABASE_URL:
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS users ("
+                "id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, "
+                "username TEXT NOT NULL UNIQUE, "
+                "password_hash TEXT NOT NULL, "
+                "role TEXT NOT NULL DEFAULT 'user' "
+                "CHECK (role IN ('user', 'admin')), "
+                "created_at TEXT NOT NULL, "
+                "points INTEGER NOT NULL DEFAULT 0, "
+                "streak INTEGER NOT NULL DEFAULT 0, "
+                "level INTEGER NOT NULL DEFAULT 1, "
+                "forest_actions INTEGER NOT NULL DEFAULT 0"
+                ")"
             )
 
-        # ----------------------------------------------------
-        # DAILY CHALLENGES
-        # ----------------------------------------------------
-
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS challenge_completions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                challenge_date TEXT NOT NULL,
-                challenge_id TEXT NOT NULL,
-                category TEXT NOT NULL,
-                points INTEGER NOT NULL,
-                completed_at TEXT NOT NULL,
-                UNIQUE(user_id, challenge_date),
-                FOREIGN KEY (user_id) REFERENCES users(id)
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS sessions ("
+                "token TEXT PRIMARY KEY, "
+                "user_id BIGINT NOT NULL REFERENCES users(id), "
+                "created_at TEXT NOT NULL"
+                ")"
             )
-            """
-        )
 
-        connection.commit()
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS reviews ("
+                "id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, "
+                "name TEXT NOT NULL, "
+                "rating INTEGER NOT NULL "
+                "CHECK (rating >= 1 AND rating <= 5), "
+                "review TEXT NOT NULL, "
+                "created_at TEXT NOT NULL, "
+                "owner_token TEXT"
+                ")"
+            )
+
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS challenge_completions ("
+                "id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, "
+                "user_id BIGINT NOT NULL REFERENCES users(id), "
+                "challenge_id TEXT NOT NULL, "
+                "challenge_date TEXT NOT NULL, "
+                "completed_at TEXT NOT NULL, "
+                "points INTEGER NOT NULL, "
+                "UNIQUE(user_id, challenge_date)"
+                ")"
+            )
+
+        else:
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS users ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "username TEXT NOT NULL UNIQUE, "
+                "password_hash TEXT NOT NULL, "
+                "role TEXT NOT NULL DEFAULT 'user' "
+                "CHECK (role IN ('user', 'admin')), "
+                "created_at TEXT NOT NULL, "
+                "points INTEGER NOT NULL DEFAULT 0, "
+                "streak INTEGER NOT NULL DEFAULT 0, "
+                "level INTEGER NOT NULL DEFAULT 1, "
+                "forest_actions INTEGER NOT NULL DEFAULT 0"
+                ")"
+            )
+
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS sessions ("
+                "token TEXT PRIMARY KEY, "
+                "user_id INTEGER NOT NULL, "
+                "created_at TEXT NOT NULL"
+                ")"
+            )
+
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS reviews ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "name TEXT NOT NULL, "
+                "rating INTEGER NOT NULL "
+                "CHECK (rating >= 1 AND rating <= 5), "
+                "review TEXT NOT NULL, "
+                "created_at TEXT NOT NULL, "
+                "owner_token TEXT"
+                ")"
+            )
+
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS challenge_completions ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "user_id INTEGER NOT NULL, "
+                "challenge_id TEXT NOT NULL, "
+                "challenge_date TEXT NOT NULL, "
+                "completed_at TEXT NOT NULL, "
+                "points INTEGER NOT NULL, "
+                "UNIQUE(user_id, challenge_date)"
+                ")"
+            )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
 
     finally:
-        connection.close()
+        db.close()
 
 
 init_db()
@@ -423,19 +422,22 @@ init_db()
 
 class Review(BaseModel):
     name: str
-    rating: int = Field(ge=1, le=5)
+    rating: int
     review: str
+    owner_token: str | None = None
 
 
 class ReviewUpdate(BaseModel):
+    token: str
+    review_id: int
     name: str
-    rating: int = Field(ge=1, le=5)
+    rating: int
     review: str
-    owner_token: str
 
 
 class ReviewDelete(BaseModel):
-    owner_token: str
+    token: str
+    review_id: int
 
 
 class RegisterRequest(BaseModel):
@@ -462,384 +464,1016 @@ CHALLENGES = [
         "id": "electricity_switch_off",
         "category": "Electricity",
         "icon": "💡",
-        "title": "Power Down What You Don't Need",
-        "description": (
-            "Before you leave a room today, switch off lights, "
-            "fans and other appliances that are not needed."
-        ),
-        "action": "Switch off at least 3 unnecessary electrical devices today.",
         "points": 10,
         "forest_points": 1,
+        "title": "Switch off what you don't need",
+        "description": (
+            "Reduce unnecessary electricity use in your room, "
+            "classroom, hostel or home."
+        ),
+        "action": (
+            "Before leaving a room, switch off lights, fans and "
+            "other appliances that are not needed."
+        ),
     },
     {
         "id": "water_wise",
         "category": "Water",
         "icon": "💧",
-        "title": "Save Every Drop",
-        "description": (
-            "Pay attention to water use today and avoid letting "
-            "water run when you do not need it."
-        ),
-        "action": "Complete 3 water-saving actions today.",
         "points": 10,
         "forest_points": 1,
+        "title": "Use water consciously",
+        "description": (
+            "Make one deliberate water-saving choice today."
+        ),
+        "action": (
+            "Turn off the tap while brushing or washing and "
+            "avoid letting clean water run unnecessarily."
+        ),
     },
     {
         "id": "food_no_waste",
         "category": "Food",
         "icon": "🍽️",
-        "title": "Finish What You Take",
-        "description": (
-            "Take only the food you realistically plan to eat "
-            "and avoid unnecessary food waste."
-        ),
-        "action": "Have one meal today without wasting edible food.",
         "points": 10,
         "forest_points": 1,
+        "title": "Finish what you take",
+        "description": (
+            "Food waste carries the footprint of everything "
+            "used to produce and deliver that food."
+        ),
+        "action": (
+            "Take only as much food as you realistically plan "
+            "to eat."
+        ),
     },
     {
         "id": "transport_walk",
         "category": "Transport",
         "icon": "🚶",
-        "title": "Choose a Cleaner Trip",
-        "description": (
-            "Replace one short motorised trip with walking, cycling "
-            "or another lower-impact option where practical."
-        ),
-        "action": "Walk or cycle for one short trip you would normally make by vehicle.",
         "points": 15,
         "forest_points": 1,
+        "title": "Choose a low-carbon trip",
+        "description": (
+            "Replace one short motorised journey with a lower-"
+            "carbon option."
+        ),
+        "action": (
+            "Walk, cycle or use shared/public transport for one "
+            "short journey where practical."
+        ),
     },
     {
         "id": "lpg_efficient",
         "category": "LPG / Cooking",
         "icon": "🔥",
-        "title": "Cook Efficiently",
-        "description": (
-            "Use practical cooking habits that avoid unnecessary "
-            "fuel use."
-        ),
-        "action": "Use a lid or another efficient cooking habit for one meal today.",
         "points": 10,
         "forest_points": 1,
+        "title": "Cook efficiently",
+        "description": (
+            "Use cooking energy carefully without requiring "
+            "you to measure LPG consumption."
+        ),
+        "action": (
+            "Use an appropriate flame and keep the vessel covered "
+            "when practical."
+        ),
     },
     {
         "id": "waste_reduce",
         "category": "Waste",
         "icon": "♻️",
-        "title": "Reject One Unnecessary Waste Item",
-        "description": (
-            "Look for one disposable or unnecessary item that you "
-            "can avoid, reuse or replace."
-        ),
-        "action": "Avoid one unnecessary disposable item today.",
         "points": 10,
         "forest_points": 1,
+        "title": "Avoid one unnecessary disposable",
+        "description": (
+            "Prevent one avoidable piece of disposable waste today."
+        ),
+        "action": (
+            "Choose a reusable bottle, cup, bag or container "
+            "instead of a disposable alternative."
+        ),
     },
     {
         "id": "nature_action",
         "category": "Forest / Nature",
         "icon": "🌿",
-        "title": "Give Nature a Hand",
-        "description": (
-            "Do one small action that supports or respects the "
-            "natural environment around you."
-        ),
-        "action": "Care for a plant, clean a small natural area, or do another genuine nature-positive action.",
         "points": 15,
         "forest_points": 2,
+        "title": "Give nature some attention",
+        "description": (
+            "Take one practical action that supports the natural "
+            "environment around you."
+        ),
+        "action": (
+            "Care for a plant, protect a green space or spend "
+            "a few minutes observing and appreciating nature."
+        ),
     },
     {
         "id": "carbon_choice",
         "category": "Carbon Reduction",
         "icon": "🌍",
-        "title": "Make One Lower-Carbon Choice",
-        "description": (
-            "Choose a realistic alternative that reduces unnecessary "
-            "resource use or emissions."
-        ),
-        "action": "Make one deliberate lower-carbon choice today and stick with it.",
         "points": 15,
         "forest_points": 2,
+        "title": "Make one lower-carbon choice",
+        "description": (
+            "Make a conscious choice that reduces unnecessary "
+            "resource use or emissions."
+        ),
+        "action": (
+            "Choose the lower-impact option when you have a "
+            "realistic choice today."
+        ),
     },
 ]
 
 
-def get_todays_challenge():
-    """
-    Deterministically selects one challenge for the Indian calendar day.
+def get_today_challenge():
+    # Everyone receives the same challenge for the same
+    # Indian calendar date.
 
-    This means every user receives the same daily challenge without
-    needing to store a challenge record for every user.
-    """
+    today = india_now().date()
 
-    today = get_today_date()
-
-    seed_value = sum(
-        (index + 1) * ord(character)
-        for index, character in enumerate(today)
+    seed = int(
+        today.strftime("%Y%m%d")
     )
 
-    index = seed_value % len(CHALLENGES)
+    index = seed % len(CHALLENGES)
 
     return CHALLENGES[index]
 
 
 def get_level_from_points(points: int) -> int:
-    """
-    GreenPulse progression:
-
-    0-99       -> Level 1
-    100-199    -> Level 2
-    200-299    -> Level 3
-    etc.
-
-    Existing user level is updated when challenge points are earned.
-    """
-
-    return max(1, (points // 100) + 1)
+    return max(
+        1,
+        (points // 100) + 1,
+    )
 
 
-def challenge_already_completed(connection, user_id, challenge_date):
-    return connection.execute(
-        """
-        SELECT
-            id,
-            challenge_id,
-            category,
-            points,
-            completed_at
-        FROM challenge_completions
-        WHERE user_id = ?
-          AND challenge_date = ?
-        LIMIT 1
-        """,
+def challenge_already_completed(
+    db,
+    user_id: int,
+    challenge_date: str,
+):
+    row = db.execute(
+        "SELECT * "
+        "FROM challenge_completions "
+        "WHERE user_id = ? "
+        "AND challenge_date = ? "
+        "LIMIT 1",
         (
             user_id,
             challenge_date,
         ),
     ).fetchone()
 
+    return row
+
+
+# ============================================================
+# FOREST BADGES
+# ============================================================
+
+FOREST_BADGES = [
+    {
+        "id": "first_step",
+        "name": "First Step",
+        "icon": "🌱",
+        "description": "Complete your first GreenPulse challenge.",
+        "type": "challenge_count",
+        "requirement": 1,
+    },
+    {
+        "id": "growing",
+        "name": "Growing",
+        "icon": "🌿",
+        "description": "Complete 3 GreenPulse challenges.",
+        "type": "challenge_count",
+        "requirement": 3,
+    },
+    {
+        "id": "consistent",
+        "name": "Consistent",
+        "icon": "🔥",
+        "description": "Reach a 7-day challenge streak.",
+        "type": "streak",
+        "requirement": 7,
+    },
+    {
+        "id": "forest_friend",
+        "name": "Forest Friend",
+        "icon": "🐦",
+        "description": "Complete 15 GreenPulse challenges.",
+        "type": "challenge_count",
+        "requirement": 15,
+    },
+    {
+        "id": "deep_explorer",
+        "name": "Deep Explorer",
+        "icon": "🌲",
+        "description": "Complete 30 GreenPulse challenges.",
+        "type": "challenge_count",
+        "requirement": 30,
+    },
+    {
+        "id": "ecosystem_builder",
+        "name": "Ecosystem Builder",
+        "icon": "💧",
+        "description": "Complete 50 GreenPulse challenges.",
+        "type": "challenge_count",
+        "requirement": 50,
+    },
+    {
+        "id": "forest_guardian",
+        "name": "Forest Guardian",
+        "icon": "🌳",
+        "description": "Complete 100 GreenPulse challenges.",
+        "type": "challenge_count",
+        "requirement": 100,
+    },
+    {
+        "id": "electricity_guardian",
+        "name": "Energy Guardian",
+        "icon": "⚡",
+        "description": "Complete 5 electricity challenges.",
+        "type": "category_count",
+        "category": "Electricity",
+        "requirement": 5,
+    },
+    {
+        "id": "water_guardian",
+        "name": "Water Guardian",
+        "icon": "💧",
+        "description": "Complete 5 water challenges.",
+        "type": "category_count",
+        "category": "Water",
+        "requirement": 5,
+    },
+    {
+        "id": "food_guardian",
+        "name": "Food Guardian",
+        "icon": "🍎",
+        "description": "Complete 5 food challenges.",
+        "type": "category_count",
+        "category": "Food",
+        "requirement": 5,
+    },
+    {
+        "id": "transport_guardian",
+        "name": "Low-Carbon Traveller",
+        "icon": "🚲",
+        "description": "Complete 5 transport challenges.",
+        "type": "category_count",
+        "category": "Transport",
+        "requirement": 5,
+    },
+    {
+        "id": "waste_guardian",
+        "name": "Waste Reducer",
+        "icon": "♻️",
+        "description": "Complete 5 waste challenges.",
+        "type": "category_count",
+        "category": "Waste",
+        "requirement": 5,
+    },
+]
+
+
+# ============================================================
+# FOREST STAGES
+# ============================================================
+
+FOREST_STAGES = [
+    {
+        "id": "seedling",
+        "name": "Seedling",
+        "icon": "🌱",
+        "minimum_actions": 0,
+        "description": (
+            "Your forest begins with a single living seed."
+        ),
+        "unlocks": [
+            "basic_forest",
+            "soft_wind",
+        ],
+    },
+    {
+        "id": "young_forest",
+        "name": "Young Forest",
+        "icon": "🌿",
+        "minimum_actions": 3,
+        "description": (
+            "New plants begin appearing around your first growth."
+        ),
+        "unlocks": [
+            "young_forest",
+            "birds",
+        ],
+    },
+    {
+        "id": "growing_forest",
+        "name": "Growing Forest",
+        "icon": "🌳",
+        "minimum_actions": 7,
+        "description": (
+            "The forest becomes denser as your actions accumulate."
+        ),
+        "unlocks": [
+            "growing_forest",
+            "insects",
+            "flowers",
+        ],
+    },
+    {
+        "id": "deep_forest",
+        "name": "Deep Forest",
+        "icon": "🌲",
+        "minimum_actions": 30,
+        "description": (
+            "The path now reaches deeper into the forest."
+        ),
+        "unlocks": [
+            "deep_forest",
+            "wildlife",
+            "deep_ambience",
+        ],
+    },
+    {
+        "id": "ecosystem",
+        "name": "Thriving Ecosystem",
+        "icon": "💧",
+        "minimum_actions": 50,
+        "description": (
+            "A living ecosystem begins to form around the forest."
+        ),
+        "unlocks": [
+            "stream",
+            "full_ecosystem",
+        ],
+    },
+    {
+        "id": "guardian_forest",
+        "name": "Forest Guardian",
+        "icon": "🌌",
+        "minimum_actions": 100,
+        "description": (
+            "Your long-term actions have transformed the forest."
+        ),
+        "unlocks": [
+            "advanced_ecosystem",
+            "rare_wildlife",
+            "night_ecosystem",
+        ],
+    },
+]
+
+
+# ============================================================
+# FOREST PROGRESSION HELPERS
+# ============================================================
+
+def get_completed_challenge_count(db, user_id: int):
+    row = db.execute(
+        "SELECT COUNT(*) AS count "
+        "FROM challenge_completions "
+        "WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+
+    return int(
+        row["count"]
+        if row
+        else 0
+    )
+
+
+def get_category_counts(db, user_id: int):
+    rows = db.execute(
+        "SELECT challenge_id, COUNT(*) AS count "
+        "FROM challenge_completions "
+        "WHERE user_id = ? "
+        "GROUP BY challenge_id",
+        (user_id,),
+    ).fetchall()
+
+    category_counts = {
+        challenge["category"]: 0
+        for challenge in CHALLENGES
+    }
+
+    challenge_map = {
+        challenge["id"]: challenge["category"]
+        for challenge in CHALLENGES
+    }
+
+    for row in rows:
+        challenge_id = row["challenge_id"]
+        count = int(row["count"])
+
+        category = challenge_map.get(
+            challenge_id
+        )
+
+        if category:
+            category_counts[category] = count
+
+    return category_counts
+
+
+def get_forest_stage(forest_actions: int):
+    current = FOREST_STAGES[0]
+    next_stage = None
+
+    for stage in FOREST_STAGES:
+        if forest_actions >= stage["minimum_actions"]:
+            current = stage
+        elif next_stage is None:
+            next_stage = stage
+
+    if next_stage:
+        previous_requirement = current["minimum_actions"]
+        next_requirement = next_stage["minimum_actions"]
+
+        span = (
+            next_requirement
+            - previous_requirement
+        )
+
+        if span <= 0:
+            progress = 100
+        else:
+            progress = (
+                (
+                    forest_actions
+                    - previous_requirement
+                )
+                / span
+            ) * 100
+
+        progress = max(
+            0,
+            min(100, round(progress)),
+        )
+
+    else:
+        progress = 100
+
+    return (
+        current,
+        next_stage,
+        progress,
+    )
+
+
+def get_unlocked_features(
+    forest_actions: int,
+    streak: int,
+):
+    unlocked = set()
+
+    for stage in FOREST_STAGES:
+        if forest_actions >= stage["minimum_actions"]:
+            unlocked.update(
+                stage["unlocks"]
+            )
+
+    if forest_actions >= 3:
+        unlocked.add("birds")
+
+    if streak >= 7:
+        unlocked.add("insects")
+
+    if forest_actions >= 15:
+        unlocked.add("wildlife")
+
+    if forest_actions >= 30:
+        unlocked.add("deep_ambience")
+
+    if forest_actions >= 50:
+        unlocked.add("stream")
+
+    if forest_actions >= 100:
+        unlocked.add("full_ecosystem")
+
+    return sorted(unlocked)
+
+
+def get_badges(
+    db,
+    user_id: int,
+    challenge_count: int,
+    streak: int,
+):
+    category_counts = get_category_counts(
+        db,
+        user_id,
+    )
+
+    badges = []
+
+    for badge in FOREST_BADGES:
+        earned = False
+        current_value = 0
+
+        if badge["type"] == "challenge_count":
+            current_value = challenge_count
+            earned = (
+                challenge_count
+                >= badge["requirement"]
+            )
+
+        elif badge["type"] == "streak":
+            current_value = streak
+            earned = (
+                streak
+                >= badge["requirement"]
+            )
+
+        elif badge["type"] == "category_count":
+            current_value = category_counts.get(
+                badge["category"],
+                0,
+            )
+
+            earned = (
+                current_value
+                >= badge["requirement"]
+            )
+
+        badges.append(
+            {
+                **badge,
+                "earned": earned,
+                "current_value": current_value,
+            }
+        )
+
+    return badges
+
+
+def get_forest_payload(db, user):
+    user_id = int(user["id"])
+
+    challenge_count = get_completed_challenge_count(
+        db,
+        user_id,
+    )
+
+    forest_actions = int(
+        user["forest_actions"] or 0
+    )
+
+    streak = int(
+        user["streak"] or 0
+    )
+
+    stage, next_stage, stage_progress = get_forest_stage(
+        forest_actions
+    )
+
+    unlocked = get_unlocked_features(
+        forest_actions,
+        streak,
+    )
+
+    badges = get_badges(
+        db,
+        user_id,
+        challenge_count,
+        streak,
+    )
+
+    earned_badges = [
+        badge
+        for badge in badges
+        if badge["earned"]
+    ]
+
+    if next_stage:
+        next_unlock = {
+            "name": next_stage["name"],
+            "icon": next_stage["icon"],
+            "required_actions": next_stage["minimum_actions"],
+            "remaining_actions": max(
+                0,
+                next_stage["minimum_actions"]
+                - forest_actions,
+            ),
+        }
+    else:
+        next_unlock = None
+
+    return {
+        "forest_actions": forest_actions,
+        "challenge_count": challenge_count,
+        "streak": streak,
+        "stage": {
+            "id": stage["id"],
+            "name": stage["name"],
+            "icon": stage["icon"],
+            "description": stage["description"],
+            "minimum_actions": stage["minimum_actions"],
+        },
+        "stage_progress": stage_progress,
+        "unlocked": unlocked,
+        "next_unlock": next_unlock,
+        "badges": badges,
+        "earned_badges": earned_badges,
+        "earned_badge_count": len(earned_badges),
+        "total_badge_count": len(badges),
+    }
+
+
+# ============================================================
+# WEATHER
+# ============================================================
+
+def weather_code_to_condition(weather_code: int):
+    # Open-Meteo WMO weather interpretation.
+
+    if weather_code == 0:
+        return "clear"
+
+    if weather_code in (1, 2):
+        return "partly_cloudy"
+
+    if weather_code == 3:
+        return "cloudy"
+
+    if weather_code in (45, 48):
+        return "fog"
+
+    if weather_code in (51, 53, 55, 56, 57):
+        return "drizzle"
+
+    if weather_code in (61, 63, 65, 66, 67):
+        return "rain"
+
+    if weather_code in (71, 73, 75, 77):
+        return "snow"
+
+    if weather_code in (80, 81, 82):
+        return "showers"
+
+    if weather_code in (85, 86):
+        return "snow_showers"
+
+    if weather_code in (95, 96, 99):
+        return "thunderstorm"
+
+    return "cloudy"
+
+
+def get_time_of_day(latitude: float, longitude: float):
+    # Helper reserved for future Forest improvements.
+
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+    }
+
+
+# ============================================================
+# AUTH HELPERS
+# ============================================================
+
+def get_current_user(db, token: str):
+    if not token:
+        return None
+
+    row = db.execute(
+        "SELECT "
+        "users.id, "
+        "users.username, "
+        "users.role, "
+        "users.created_at, "
+        "users.points, "
+        "users.streak, "
+        "users.level, "
+        "users.forest_actions "
+        "FROM sessions "
+        "JOIN users "
+        "ON users.id = sessions.user_id "
+        "WHERE sessions.token = ? "
+        "LIMIT 1",
+        (token,),
+    ).fetchone()
+
+    return row
+
+
+# ============================================================
+# BASIC ROUTES
+# ============================================================
+
+@app.get("/")
+def root():
+    return {
+        "name": "GreenPulse API",
+        "status": "online",
+    }
+
+
+@app.get("/api/health")
+def health():
+    return {
+        "status": "ok",
+        "database": (
+            "supabase-postgresql"
+            if DATABASE_URL
+            else "sqlite-fallback"
+        ),
+    }
+
+
+@app.get("/api/impact")
+def impact():
+    return {
+        "message": "GreenPulse impact API is online."
+    }
+
 
 # ============================================================
 # AUTH — REGISTER
 # ============================================================
 
-@app.post("/api/auth/register")
-def register(data: RegisterRequest):
+@app.post("/api/register")
+def register(request: RegisterRequest):
+    username = request.username.strip()
 
-    username = data.username.strip()
-
-    if len(username) < 3:
+    if len(username) < 2:
         raise HTTPException(
             status_code=400,
-            detail="Username must be at least 3 characters",
+            detail="Username must contain at least 2 characters.",
         )
 
-    if len(data.password) < 8:
+    if len(request.password) < 6:
         raise HTTPException(
             status_code=400,
-            detail="Password must be at least 8 characters",
+            detail="Password must contain at least 6 characters.",
         )
 
-    password_hash = hash_password(data.password)
-
-    created_at = datetime.now(timezone.utc).isoformat()
-
-    connection = get_db()
+    db = get_db()
 
     try:
-        cursor = connection.execute(
-            """
-            INSERT INTO users
-                (username, password_hash, role, created_at)
-            VALUES
-                (?, ?, 'user', ?)
-            RETURNING id
-            """,
-            (
-                username,
-                password_hash,
-                created_at,
-            ),
+        existing = db.execute(
+            "SELECT id "
+            "FROM users "
+            "WHERE LOWER(username) = LOWER(?) "
+            "LIMIT 1",
+            (username,),
+        ).fetchone()
+
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Username already exists.",
+            )
+
+        password_hash = hash_password(
+            request.password
         )
 
-        returned_row = cursor.fetchone()
+        created_at = india_now_iso()
 
-        user_id = returned_row["id"]
+        if DATABASE_URL:
+            row = db.execute(
+                "INSERT INTO users ("
+                "username, "
+                "password_hash, "
+                "role, "
+                "created_at, "
+                "points, "
+                "streak, "
+                "level, "
+                "forest_actions"
+                ") "
+                "VALUES (?, ?, 'user', ?, 0, 0, 1, 0) "
+                "RETURNING id, username, role",
+                (
+                    username,
+                    password_hash,
+                    created_at,
+                ),
+            ).fetchone()
 
-        connection.commit()
+        else:
+            cursor = db.execute(
+                "INSERT INTO users ("
+                "username, "
+                "password_hash, "
+                "role, "
+                "created_at, "
+                "points, "
+                "streak, "
+                "level, "
+                "forest_actions"
+                ") "
+                "VALUES (?, ?, 'user', ?, 0, 0, 1, 0)",
+                (
+                    username,
+                    password_hash,
+                    created_at,
+                ),
+            )
 
-    except (
-        sqlite3.IntegrityError,
-        PostgresIntegrityError,
-    ):
-        connection.close()
+            row = {
+                "id": cursor.lastrowid,
+                "username": username,
+                "role": "user",
+            }
+
+        db.commit()
+
+        return {
+            "message": "Registration successful.",
+            "user": dict(row),
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "REGISTER ERROR:",
+            error,
+        )
 
         raise HTTPException(
-            status_code=409,
-            detail="Username already exists",
+            status_code=500,
+            detail="Unable to register user.",
         )
 
-    connection.close()
-
-    return {
-        "message": "Account created successfully",
-        "user": {
-            "id": user_id,
-            "username": username,
-            "role": "user",
-        },
-    }
+    finally:
+        db.close()
 
 
 # ============================================================
 # AUTH — LOGIN
 # ============================================================
 
-@app.post("/api/auth/login")
-def login(data: LoginRequest):
+@app.post("/api/login")
+def login(request: LoginRequest):
+    username = request.username.strip()
 
-    username = data.username.strip()
+    db = get_db()
 
-    connection = get_db()
+    try:
+        row = db.execute(
+            "SELECT * "
+            "FROM users "
+            "WHERE LOWER(username) = LOWER(?) "
+            "LIMIT 1",
+            (username,),
+        ).fetchone()
 
-    user = connection.execute(
-        """
-        SELECT
-            id,
-            username,
-            password_hash,
-            role
-        FROM users
-        WHERE username = ?
-        """,
-        (username,),
-    ).fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid username or password.",
+            )
 
-    if not user:
-        connection.close()
+        if not verify_password(
+            request.password,
+            row["password_hash"],
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid username or password.",
+            )
 
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid username or password",
+        token = secrets.token_urlsafe(32)
+
+        db.execute(
+            "INSERT INTO sessions ("
+            "token, "
+            "user_id, "
+            "created_at"
+            ") "
+            "VALUES (?, ?, ?)",
+            (
+                token,
+                row["id"],
+                india_now_iso(),
+            ),
         )
 
-    if not verify_password(
-        data.password,
-        user["password_hash"],
-    ):
-        connection.close()
+        db.commit()
 
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid username or password",
-        )
-
-    token = secrets.token_urlsafe(32)
-
-    created_at = datetime.now(timezone.utc).isoformat()
-
-    connection.execute(
-        """
-        INSERT INTO sessions
-            (token, user_id, created_at)
-        VALUES
-            (?, ?, ?)
-        """,
-        (
-            token,
-            user["id"],
-            created_at,
-        ),
-    )
-
-    connection.commit()
-    connection.close()
-
-    return {
-        "message": "Login successful",
-        "token": token,
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "role": user["role"],
-        },
-    }
-
-
-# ============================================================
-# AUTH — CURRENT USER
-# ============================================================
-
-@app.get("/api/auth/me")
-def me(token: str):
-
-    user = get_current_user(token)
-
-    return {
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "role": user["role"],
+        return {
+            "token": token,
+            "user": {
+                "id": row["id"],
+                "username": row["username"],
+                "role": row["role"],
+            },
         }
-    }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "LOGIN ERROR:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to login.",
+        )
+
+    finally:
+        db.close()
+
+
+# ============================================================
+# AUTH — ME
+# ============================================================
+
+@app.get("/api/me")
+def me(token: str):
+    db = get_db()
+
+    try:
+        user = get_current_user(
+            db,
+            token,
+        )
+
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired session.",
+            )
+
+        return {
+            "user": dict(user),
+        }
+
+    finally:
+        db.close()
 
 
 # ============================================================
 # AUTH — LOGOUT
 # ============================================================
 
-@app.post("/api/auth/logout")
+@app.post("/api/logout")
 def logout(token: str):
+    db = get_db()
 
-    connection = get_db()
+    try:
+        db.execute(
+            "DELETE FROM sessions "
+            "WHERE token = ?",
+            (token,),
+        )
 
-    connection.execute(
-        """
-        DELETE FROM sessions
-        WHERE token = ?
-        """,
-        (token,),
-    )
+        db.commit()
 
-    connection.commit()
-    connection.close()
+        return {
+            "message": "Logged out successfully."
+        }
 
-    return {
-        "message": "Logged out successfully",
-    }
+    finally:
+        db.close()
 
 
 # ============================================================
-# BASIC ENDPOINTS
+# REVIEWS — GET
 # ============================================================
 
-@app.get("/")
-def home():
+@app.get("/api/reviews")
+def get_reviews():
+    db = get_db()
 
-    return {
-        "message": "GreenPulse API is running 🌱",
-    }
+    try:
+        rows = db.execute(
+            "SELECT "
+            "id, "
+            "name, "
+            "rating, "
+            "review, "
+            "created_at "
+            "FROM reviews "
+            "ORDER BY id DESC"
+        ).fetchall()
 
+        return [
+            dict(row)
+            for row in rows
+        ]
 
-@app.get("/api/health")
-def health():
-
-    return {
-        "status": "healthy",
-        "service": "GreenPulse backend",
-    }
-
-
-@app.get("/api/impact")
-def impact():
-
-    return {
-        "points": 72,
-        "level": 4,
-        "status": "Growing",
-    }
+    finally:
+        db.close()
 
 
 # ============================================================
@@ -847,465 +1481,448 @@ def impact():
 # ============================================================
 
 @app.post("/api/reviews")
-def create_review(data: Review):
-
-    name = data.name.strip()
-    review_text = data.review.strip()
-
-    if not name:
+def create_review(review: Review):
+    if review.rating < 1 or review.rating > 5:
         raise HTTPException(
             status_code=400,
-            detail="Name cannot be empty",
+            detail="Rating must be between 1 and 5.",
         )
 
-    if not review_text:
+    if not review.name.strip():
         raise HTTPException(
             status_code=400,
-            detail="Review cannot be empty",
+            detail="Name is required.",
         )
 
-    created_at = datetime.now(timezone.utc).isoformat()
+    if not review.review.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Review cannot be empty.",
+        )
 
-    owner_token = secrets.token_urlsafe(32)
-
-    connection = get_db()
+    db = get_db()
 
     try:
-        cursor = connection.execute(
-            """
-            INSERT INTO reviews
-                (name, rating, review, created_at, owner_token)
-            VALUES
-                (?, ?, ?, ?, ?)
-            RETURNING id
-            """,
+        db.execute(
+            "INSERT INTO reviews ("
+            "name, "
+            "rating, "
+            "review, "
+            "created_at, "
+            "owner_token"
+            ") "
+            "VALUES (?, ?, ?, ?, ?)",
             (
-                name,
-                data.rating,
-                review_text,
-                created_at,
-                owner_token,
+                review.name.strip(),
+                review.rating,
+                review.review.strip(),
+                india_now_iso(),
+                review.owner_token,
             ),
         )
 
-        returned_row = cursor.fetchone()
+        db.commit()
 
-        review_id = returned_row["id"]
+        return {
+            "message": "Review submitted successfully."
+        }
 
-        connection.commit()
+    except Exception as error:
+        db.rollback()
 
-    except Exception:
-        connection.close()
-        raise
+        print(
+            "CREATE REVIEW ERROR:",
+            error,
+        )
 
-    connection.close()
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to save review.",
+        )
 
-    return {
-        "message": "Review saved successfully",
-        "review": {
-            "id": review_id,
-            "name": name,
-            "rating": data.rating,
-            "review": review_text,
-            "created_at": created_at,
-        },
-        "owner_token": owner_token,
-    }
-
-
-# ============================================================
-# REVIEWS — READ
-# ============================================================
-
-@app.get("/api/reviews")
-def get_reviews():
-
-    connection = get_db()
-
-    rows = connection.execute(
-        """
-        SELECT
-            id,
-            name,
-            rating,
-            review,
-            created_at
-        FROM reviews
-        ORDER BY id DESC
-        """
-    ).fetchall()
-
-    connection.close()
-
-    reviews = [dict(row) for row in rows]
-
-    return {
-        "reviews": reviews,
-    }
+    finally:
+        db.close()
 
 
 # ============================================================
 # REVIEWS — UPDATE
 # ============================================================
 
-@app.put("/api/reviews/{review_id}")
-def update_review(
-    review_id: int,
-    data: ReviewUpdate,
-):
-
-    name = data.name.strip()
-    review_text = data.review.strip()
-
-    if not name:
+@app.put("/api/reviews")
+def update_review(request: ReviewUpdate):
+    if request.rating < 1 or request.rating > 5:
         raise HTTPException(
             status_code=400,
-            detail="Name cannot be empty",
+            detail="Rating must be between 1 and 5.",
         )
 
-    if not review_text:
+    db = get_db()
+
+    try:
+        current_user = get_current_user(
+            db,
+            request.token,
+        )
+
+        if not current_user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        row = db.execute(
+            "SELECT * "
+            "FROM reviews "
+            "WHERE id = ? "
+            "LIMIT 1",
+            (request.review_id,),
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Review not found.",
+            )
+
+        owner_token = row["owner_token"]
+
+        is_owner = (
+            owner_token
+            and owner_token == request.token
+        )
+
+        is_admin = (
+            current_user["role"] == "admin"
+        )
+
+        if not is_owner and not is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="You cannot edit this review.",
+            )
+
+        db.execute(
+            "UPDATE reviews "
+            "SET "
+            "name = ?, "
+            "rating = ?, "
+            "review = ? "
+            "WHERE id = ?",
+            (
+                request.name.strip(),
+                request.rating,
+                request.review.strip(),
+                request.review_id,
+            ),
+        )
+
+        db.commit()
+
+        return {
+            "message": "Review updated successfully."
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "UPDATE REVIEW ERROR:",
+            error,
+        )
+
         raise HTTPException(
-            status_code=400,
-            detail="Review cannot be empty",
+            status_code=500,
+            detail="Unable to update review.",
         )
 
-    connection = get_db()
-
-    row = connection.execute(
-        """
-        SELECT id
-        FROM reviews
-        WHERE id = ?
-          AND owner_token = ?
-        """,
-        (
-            review_id,
-            data.owner_token,
-        ),
-    ).fetchone()
-
-    if not row:
-        connection.close()
-
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to edit this review",
-        )
-
-    connection.execute(
-        """
-        UPDATE reviews
-        SET
-            name = ?,
-            rating = ?,
-            review = ?
-        WHERE id = ?
-        """,
-        (
-            name,
-            data.rating,
-            review_text,
-            review_id,
-        ),
-    )
-
-    connection.commit()
-    connection.close()
-
-    return {
-        "message": "Review updated successfully",
-    }
+    finally:
+        db.close()
 
 
 # ============================================================
 # REVIEWS — DELETE
 # ============================================================
 
-@app.delete("/api/reviews/{review_id}")
-def delete_review(
-    review_id: int,
-    data: ReviewDelete,
-):
+@app.delete("/api/reviews")
+def delete_review(request: ReviewDelete):
+    db = get_db()
 
-    connection = get_db()
-
-    row = connection.execute(
-        """
-        SELECT id
-        FROM reviews
-        WHERE id = ?
-          AND owner_token = ?
-        """,
-        (
-            review_id,
-            data.owner_token,
-        ),
-    ).fetchone()
-
-    if not row:
-        connection.close()
-
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to delete this review",
+    try:
+        current_user = get_current_user(
+            db,
+            request.token,
         )
 
-    connection.execute(
-        """
-        DELETE FROM reviews
-        WHERE id = ?
-        """,
-        (review_id,),
-    )
+        if not current_user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
 
-    connection.commit()
-    connection.close()
+        row = db.execute(
+            "SELECT * "
+            "FROM reviews "
+            "WHERE id = ? "
+            "LIMIT 1",
+            (request.review_id,),
+        ).fetchone()
 
-    return {
-        "message": "Review deleted successfully",
-    }
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Review not found.",
+            )
+
+        owner_token = row["owner_token"]
+
+        is_owner = (
+            owner_token
+            and owner_token == request.token
+        )
+
+        is_admin = (
+            current_user["role"] == "admin"
+        )
+
+        if not is_owner and not is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="You cannot delete this review.",
+            )
+
+        db.execute(
+            "DELETE FROM reviews "
+            "WHERE id = ?",
+            (request.review_id,),
+        )
+
+        db.commit()
+
+        return {
+            "message": "Review deleted successfully."
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "DELETE REVIEW ERROR:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to delete review.",
+        )
+
+    finally:
+        db.close()
 
 
 # ============================================================
-# DAILY CHALLENGES — TODAY
+# DAILY CHALLENGE — TODAY
 # ============================================================
 
 @app.get("/api/challenges/today")
-def today_challenge(token: str):
-
-    user = get_current_user(token)
-
-    challenge = get_todays_challenge()
-
-    today = get_today_date()
-
-    connection = get_db()
+def challenge_today(token: str):
+    db = get_db()
 
     try:
+        user = get_current_user(
+            db,
+            token,
+        )
+
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        today = india_today()
+
+        challenge = get_today_challenge()
+
         completion = challenge_already_completed(
-            connection,
+            db,
             user["id"],
             today,
         )
-    finally:
-        connection.close()
 
-    return {
-        "date": today,
-        "challenge": {
-            "id": challenge["id"],
-            "category": challenge["category"],
-            "icon": challenge["icon"],
-            "title": challenge["title"],
-            "description": challenge["description"],
-            "action": challenge["action"],
-            "points": challenge["points"],
-        },
-        "completed": bool(completion),
-        "completion": (
-            {
-                "completed_at": completion["completed_at"],
-                "points": completion["points"],
-            }
-            if completion
-            else None
-        ),
-    }
+        return {
+            "date": today,
+            "challenge": challenge,
+            "completed": bool(completion),
+            "completion": (
+                dict(completion)
+                if completion
+                else None
+            ),
+        }
+
+    finally:
+        db.close()
 
 
 # ============================================================
-# DAILY CHALLENGES — COMPLETE
+# DAILY CHALLENGE — COMPLETE
 # ============================================================
 
 @app.post("/api/challenges/complete")
-def complete_challenge(data: ChallengeCompleteRequest):
-
-    user = get_current_user(data.token)
-
-    challenge = get_todays_challenge()
-
-    today = get_today_date()
-
-    # --------------------------------------------------------
-    # IMPORTANT:
-    # The client is NOT trusted to decide which challenge
-    # exists today.
-    #
-    # We compare the submitted challenge_id with the server's
-    # actual challenge.
-    # --------------------------------------------------------
-
-    if data.challenge_id != challenge["id"]:
-        raise HTTPException(
-            status_code=400,
-            detail="This challenge is no longer active",
-        )
-
-    connection = get_db()
+def complete_challenge(
+    request: ChallengeCompleteRequest,
+):
+    db = get_db()
 
     try:
+        user = get_current_user(
+            db,
+            request.token,
+        )
 
-        # ----------------------------------------------------
-        # DUPLICATE PROTECTION
-        # ----------------------------------------------------
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        challenge = next(
+            (
+                item
+                for item in CHALLENGES
+                if item["id"] == request.challenge_id
+            ),
+            None,
+        )
+
+        if not challenge:
+            raise HTTPException(
+                status_code=404,
+                detail="Challenge not found.",
+            )
+
+        today = india_today()
 
         existing = challenge_already_completed(
-            connection,
+            db,
             user["id"],
             today,
         )
 
         if existing:
-            connection.close()
-
             raise HTTPException(
                 status_code=409,
-                detail="Today's challenge has already been completed",
+                detail="Today's challenge is already completed.",
             )
 
         # ----------------------------------------------------
-        # GET CURRENT USER STATS
+        # STREAK
         # ----------------------------------------------------
 
-        current_user = connection.execute(
-            """
-            SELECT
-                points,
-                streak,
-                level,
-                forest_actions
-            FROM users
-            WHERE id = ?
-            """,
+        current_streak = int(
+            user["streak"] or 0
+        )
+
+        previous_completion = db.execute(
+            "SELECT challenge_date "
+            "FROM challenge_completions "
+            "WHERE user_id = ? "
+            "ORDER BY challenge_date DESC "
+            "LIMIT 1",
             (user["id"],),
         ).fetchone()
 
-        if not current_user:
-            connection.close()
+        if previous_completion:
+            previous_date = datetime.strptime(
+                previous_completion["challenge_date"],
+                "%Y-%m-%d",
+            ).date()
 
-            raise HTTPException(
-                status_code=404,
-                detail="User account not found",
-            )
+            today_date = india_now().date()
 
-        old_points = int(current_user["points"])
-        old_streak = int(current_user["streak"])
-        old_forest_actions = int(current_user["forest_actions"])
+            if previous_date == (
+                today_date
+                - timedelta(days=1)
+            ):
+                new_streak = (
+                    current_streak + 1
+                )
+            else:
+                new_streak = 1
 
-        # ----------------------------------------------------
-        # STREAK LOGIC
-        # ----------------------------------------------------
-
-        previous_date = (
-            get_india_now().date()
-        )
-
-        from datetime import timedelta
-
-        yesterday = (
-            previous_date - timedelta(days=1)
-        ).isoformat()
-
-        yesterday_completion = connection.execute(
-            """
-            SELECT id
-            FROM challenge_completions
-            WHERE user_id = ?
-              AND challenge_date = ?
-            LIMIT 1
-            """,
-            (
-                user["id"],
-                yesterday,
-            ),
-        ).fetchone()
-
-        if yesterday_completion:
-            new_streak = old_streak + 1
         else:
             new_streak = 1
 
         # ----------------------------------------------------
-        # POINTS
+        # PROGRESS
         # ----------------------------------------------------
 
-        challenge_points = int(challenge["points"])
-
-        new_points = old_points + challenge_points
-
-        # ----------------------------------------------------
-        # LEVEL
-        # ----------------------------------------------------
-
-        new_level = get_level_from_points(new_points)
-
-        # ----------------------------------------------------
-        # FOREST
-        # ----------------------------------------------------
-
-        forest_gain = int(challenge["forest_points"])
-
-        new_forest_actions = (
-            old_forest_actions + forest_gain
+        current_points = int(
+            user["points"] or 0
         )
 
-        completed_at = datetime.now(timezone.utc).isoformat()
+        current_forest_actions = int(
+            user["forest_actions"] or 0
+        )
+
+        new_points = (
+            current_points
+            + challenge["points"]
+        )
+
+        new_forest_actions = (
+            current_forest_actions
+            + challenge["forest_points"]
+        )
+
+        new_level = get_level_from_points(
+            new_points
+        )
+
+        completed_at = india_now_iso()
 
         # ----------------------------------------------------
-        # RECORD COMPLETION FIRST
+        # SAVE CHALLENGE COMPLETION
         # ----------------------------------------------------
 
-        try:
-            connection.execute(
-                """
-                INSERT INTO challenge_completions
-                    (
-                        user_id,
-                        challenge_date,
-                        challenge_id,
-                        category,
-                        points,
-                        completed_at
-                    )
-                VALUES
-                    (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    user["id"],
-                    today,
-                    challenge["id"],
-                    challenge["category"],
-                    challenge_points,
-                    completed_at,
-                ),
-            )
-
-        except (
-            sqlite3.IntegrityError,
-            PostgresIntegrityError,
-        ):
-            connection.rollback()
-            connection.close()
-
-            raise HTTPException(
-                status_code=409,
-                detail="Today's challenge has already been completed",
-            )
+        db.execute(
+            "INSERT INTO challenge_completions ("
+            "user_id, "
+            "challenge_id, "
+            "challenge_date, "
+            "completed_at, "
+            "points"
+            ") "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                user["id"],
+                challenge["id"],
+                today,
+                completed_at,
+                challenge["points"],
+            ),
+        )
 
         # ----------------------------------------------------
         # UPDATE USER PROGRESS
         # ----------------------------------------------------
 
-        connection.execute(
-            """
-            UPDATE users
-            SET
-                points = ?,
-                streak = ?,
-                level = ?,
-                forest_actions = ?
-            WHERE id = ?
-            """,
+        db.execute(
+            "UPDATE users "
+            "SET "
+            "points = ?, "
+            "streak = ?, "
+            "level = ?, "
+            "forest_actions = ? "
+            "WHERE id = ?",
             (
                 new_points,
                 new_streak,
@@ -1315,82 +1932,541 @@ def complete_challenge(data: ChallengeCompleteRequest):
             ),
         )
 
-        connection.commit()
+        db.commit()
+
+        return {
+            "message": "Challenge completed.",
+            "challenge": challenge,
+            "progress": {
+                "points": new_points,
+                "streak": new_streak,
+                "level": new_level,
+                "forest_actions": new_forest_actions,
+            },
+        }
 
     except HTTPException:
+        db.rollback()
         raise
 
-    except Exception:
-        try:
-            connection.rollback()
-        except Exception:
-            pass
+    except Exception as error:
+        db.rollback()
 
-        raise
+        print(
+            "CHALLENGE COMPLETION ERROR:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to complete challenge.",
+        )
 
     finally:
-        try:
-            connection.close()
-        except Exception:
-            pass
-
-    return {
-        "message": "Challenge completed successfully",
-        "challenge": {
-            "id": challenge["id"],
-            "category": challenge["category"],
-            "title": challenge["title"],
-            "points": challenge_points,
-        },
-        "progress": {
-            "points": new_points,
-            "streak": new_streak,
-            "level": new_level,
-            "forest_actions": new_forest_actions,
-        },
-        "forest": {
-            "actions_added": forest_gain,
-        },
-    }
+        db.close()
 
 
 # ============================================================
-# DAILY CHALLENGES — HISTORY
+# CHALLENGE HISTORY
 # ============================================================
 
 @app.get("/api/challenges/history")
-def challenge_history(
-    token: str,
-    limit: int = 30,
-):
-
-    user = get_current_user(token)
-
-    limit = max(1, min(limit, 100))
-
-    connection = get_db()
+def challenge_history(token: str):
+    db = get_db()
 
     try:
-        rows = connection.execute(
-            f"""
-            SELECT
-                challenge_date,
-                challenge_id,
-                category,
-                points,
-                completed_at
-            FROM challenge_completions
-            WHERE user_id = ?
-            ORDER BY challenge_date DESC
-            LIMIT {limit}
-            """,
+        user = get_current_user(
+            db,
+            token,
+        )
+
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        rows = db.execute(
+            "SELECT "
+            "challenge_id, "
+            "challenge_date, "
+            "completed_at, "
+            "points "
+            "FROM challenge_completions "
+            "WHERE user_id = ? "
+            "ORDER BY challenge_date DESC",
             (user["id"],),
         ).fetchall()
+
+        challenge_map = {
+            challenge["id"]: challenge
+            for challenge in CHALLENGES
+        }
+
+        history = []
+
+        for row in rows:
+            challenge = challenge_map.get(
+                row["challenge_id"]
+            )
+
+            history.append(
+                {
+                    "challenge_id": row["challenge_id"],
+                    "challenge_date": row["challenge_date"],
+                    "completed_at": row["completed_at"],
+                    "points": row["points"],
+                    "challenge": challenge,
+                }
+            )
+
+        return {
+            "history": history,
+            "count": len(history),
+        }
+
     finally:
-        connection.close()
+        db.close()
+
+
+# ============================================================
+# FOREST — REAL PROGRESS
+# ============================================================
+
+@app.get("/api/forest")
+def forest(token: str):
+    db = get_db()
+
+    try:
+        user = get_current_user(
+            db,
+            token,
+        )
+
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        return get_forest_payload(
+            db,
+            user,
+        )
+
+    finally:
+        db.close()
+
+
+# ============================================================
+# FOREST — BADGES ONLY
+# ============================================================
+
+@app.get("/api/forest/badges")
+def forest_badges(token: str):
+    db = get_db()
+
+    try:
+        user = get_current_user(
+            db,
+            token,
+        )
+
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        payload = get_forest_payload(
+            db,
+            user,
+        )
+
+        return {
+            "badges": payload["badges"],
+            "earned_badges": payload["earned_badges"],
+            "earned_badge_count": payload[
+                "earned_badge_count"
+            ],
+            "total_badge_count": payload[
+                "total_badge_count"
+            ],
+        }
+
+    finally:
+        db.close()
+
+
+# ============================================================
+# FOREST — WEATHER
+# ============================================================
+
+@app.get("/api/forest/weather")
+def forest_weather(
+    latitude: float = 28.6139,
+    longitude: float = 77.2090,
+):
+    # Live weather source for the Forest.
+    #
+    # Defaults to Delhi coordinates.
+    # The frontend can provide another location later.
+    #
+    # Open-Meteo does not require an API key.
+    #
+    # Weather + day/night + season are combined into
+    # a semantic Forest environment.
+
+    query = urllib.parse.urlencode(
+        {
+            "latitude": latitude,
+            "longitude": longitude,
+            "current": (
+                "temperature_2m,"
+                "relative_humidity_2m,"
+                "apparent_temperature,"
+                "is_day,"
+                "precipitation,"
+                "rain,"
+                "showers,"
+                "snowfall,"
+                "weather_code,"
+                "cloud_cover,"
+                "wind_speed_10m,"
+                "wind_gusts_10m"
+            ),
+            "daily": (
+                "sunrise,"
+                "sunset"
+            ),
+            "timezone": "auto",
+            "forecast_days": 1,
+        }
+    )
+
+    url = (
+        "https://api.open-meteo.com/v1/forecast?"
+        + query
+    )
+
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "GreenPulse/1.0"
+            },
+        )
+
+        with urllib.request.urlopen(
+            request,
+            timeout=8,
+        ) as response:
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        current = data.get(
+            "current",
+            {},
+        )
+
+        daily = data.get(
+            "daily",
+            {},
+        )
+
+        weather_code = int(
+            current.get(
+                "weather_code",
+                0,
+            )
+        )
+
+        condition = weather_code_to_condition(
+            weather_code
+        )
+
+        is_day = bool(
+            current.get(
+                "is_day",
+                1,
+            )
+        )
+
+        sunrise = daily.get(
+            "sunrise",
+            [None],
+        )[0]
+
+        sunset = daily.get(
+            "sunset",
+            [None],
+        )[0]
+
+        current_date = india_now().date()
+
+        season = get_current_season(
+            current_date
+        )
+
+        season_progress = get_season_progress(
+            current_date
+        )
+
+        time_of_day = (
+            "day"
+            if is_day
+            else "night"
+        )
+
+        # ----------------------------------------------------
+        # COMBINED FOREST ENVIRONMENT
+        # ----------------------------------------------------
+
+        theme = (
+            f"{season['id']}_"
+            f"{condition}_"
+            f"{time_of_day}"
+        )
+
+        environment_tags = []
+
+        # ----------------------------------------------------
+        # SEASON TAGS
+        # ----------------------------------------------------
+
+        if season["id"] == "spring":
+            environment_tags.extend(
+                [
+                    "fresh_growth",
+                    "soft_sunlight",
+                    "spring_bloom",
+                ]
+            )
+
+        elif season["id"] == "summer":
+            environment_tags.extend(
+                [
+                    "warm_light",
+                    "full_canopy",
+                    "long_day",
+                ]
+            )
+
+        elif season["id"] == "monsoon":
+            environment_tags.extend(
+                [
+                    "lush_greenery",
+                    "moist_air",
+                    "monsoon_atmosphere",
+                ]
+            )
+
+        elif season["id"] == "autumn":
+            environment_tags.extend(
+                [
+                    "earthy_tones",
+                    "settling_canopy",
+                    "warm_light",
+                ]
+            )
+
+        elif season["id"] == "winter":
+            environment_tags.extend(
+                [
+                    "cool_air",
+                    "soft_light",
+                    "morning_mist",
+                ]
+            )
+
+        # ----------------------------------------------------
+        # RAIN TAGS
+        # ----------------------------------------------------
+
+        if condition in (
+            "rain",
+            "drizzle",
+            "showers",
+            "thunderstorm",
+        ):
+            environment_tags.extend(
+                [
+                    "wet_foliage",
+                    "rain_particles",
+                    "rain_ambience",
+                ]
+            )
+
+        # ----------------------------------------------------
+        # STORM TAGS
+        # ----------------------------------------------------
+
+        if condition == "thunderstorm":
+            environment_tags.extend(
+                [
+                    "storm_wind",
+                    "distant_thunder",
+                    "occasional_lightning",
+                ]
+            )
+
+        # ----------------------------------------------------
+        # FOG TAGS
+        # ----------------------------------------------------
+
+        if condition == "fog":
+            environment_tags.extend(
+                [
+                    "mist",
+                    "reduced_visibility",
+                ]
+            )
+
+        # ----------------------------------------------------
+        # NIGHT TAGS
+        # ----------------------------------------------------
+
+        if not is_day:
+            environment_tags.extend(
+                [
+                    "night_lighting",
+                    "nocturnal_ambience",
+                ]
+            )
+
+        # ----------------------------------------------------
+        # DAYLIGHT TAGS
+        # ----------------------------------------------------
+
+        if is_day and condition in (
+            "clear",
+            "partly_cloudy",
+        ):
+            environment_tags.extend(
+                [
+                    "sun_rays",
+                    "canopy_shadows",
+                ]
+            )
+
+        return {
+            "location": {
+                "latitude": latitude,
+                "longitude": longitude,
+                "timezone": data.get(
+                    "timezone"
+                ),
+            },
+            "current": {
+                "temperature_c": current.get(
+                    "temperature_2m"
+                ),
+                "relative_humidity": current.get(
+                    "relative_humidity_2m"
+                ),
+                "apparent_temperature_c": current.get(
+                    "apparent_temperature"
+                ),
+                "precipitation_mm": current.get(
+                    "precipitation"
+                ),
+                "rain_mm": current.get(
+                    "rain"
+                ),
+                "showers_mm": current.get(
+                    "showers"
+                ),
+                "snowfall_cm": current.get(
+                    "snowfall"
+                ),
+                "weather_code": weather_code,
+                "condition": condition,
+                "cloud_cover": current.get(
+                    "cloud_cover"
+                ),
+                "wind_speed_kmh": current.get(
+                    "wind_speed_10m"
+                ),
+                "wind_gusts_kmh": current.get(
+                    "wind_gusts_10m"
+                ),
+                "is_day": is_day,
+                "time_of_day": time_of_day,
+            },
+            "sun": {
+                "sunrise": sunrise,
+                "sunset": sunset,
+            },
+            "season": {
+                "id": season["id"],
+                "name": season["name"],
+                "icon": season["icon"],
+                "description": season["description"],
+                "progress": season_progress,
+            },
+            "forest_environment": {
+                "theme": theme,
+                "season": season["id"],
+                "weather": condition,
+                "time_of_day": time_of_day,
+                "rain": condition in (
+                    "rain",
+                    "drizzle",
+                    "showers",
+                    "thunderstorm",
+                ),
+                "storm": condition == "thunderstorm",
+                "night": not is_day,
+                "environment_tags": sorted(
+                    set(environment_tags)
+                ),
+            },
+            "source": "Open-Meteo",
+        }
+
+    except Exception as error:
+        print(
+            "FOREST WEATHER ERROR:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Live weather is temporarily "
+                "unavailable."
+            ),
+        )
+
+
+# ============================================================
+# FOREST — SEASON
+# ============================================================
+
+@app.get("/api/forest/season")
+def forest_season():
+    # Season is environmental world data,
+    # so authentication is not required.
+
+    today = india_now().date()
+
+    season = get_current_season(
+        today
+    )
 
     return {
-        "history": [dict(row) for row in rows],
+        "date": today.isoformat(),
+        "season": {
+            "id": season["id"],
+            "name": season["name"],
+            "icon": season["icon"],
+            "description": season["description"],
+            "progress": get_season_progress(
+                today
+            ),
+        },
+        "source": "GreenPulse seasonal calendar",
     }
 
 
@@ -1400,38 +2476,67 @@ def challenge_history(
 
 @app.get("/api/dashboard")
 def dashboard(token: str):
+    db = get_db()
 
-    user = get_current_user(token)
-
-    connection = get_db()
-
-    stats = connection.execute(
-        """
-        SELECT
-            username,
-            points,
-            streak,
-            level,
-            forest_actions
-        FROM users
-        WHERE id = ?
-        """,
-        (user["id"],),
-    ).fetchone()
-
-    connection.close()
-
-    if not stats:
-        raise HTTPException(
-            status_code=404,
-            detail="User account not found",
+    try:
+        user = get_current_user(
+            db,
+            token,
         )
 
-    return {
-        "username": stats["username"],
-        "points": stats["points"],
-        "streak": stats["streak"],
-        "level": stats["level"],
-        "forest_actions": stats["forest_actions"],
-    }
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
 
+        return {
+            "points": int(
+                user["points"] or 0
+            ),
+            "streak": int(
+                user["streak"] or 0
+            ),
+            "level": int(
+                user["level"] or 1
+            ),
+            "forest_actions": int(
+                user["forest_actions"] or 0
+            ),
+        }
+
+    finally:
+        db.close()
+
+
+# ============================================================
+# STARTUP INFO
+# ============================================================
+
+@app.on_event("startup")
+def startup_message():
+    current_season = get_current_season()
+
+    print("----------------------------------------")
+    print("GREEN PULSE API STARTED")
+
+    print(
+        "DATABASE:",
+        (
+            "SUPABASE POSTGRESQL"
+            if DATABASE_URL
+            else "SQLITE FALLBACK"
+        ),
+    )
+
+    print(
+        "TODAY'S CHALLENGE:",
+        get_today_challenge()["id"],
+    )
+
+    print(
+        "CURRENT SEASON:",
+        current_season["name"],
+    )
+
+    print("----------------------------------------")
