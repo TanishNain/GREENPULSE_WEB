@@ -7,15 +7,12 @@
   --bg-light: #0b1710;
   --card: rgba(255, 255, 255, 0.055);
   --card-hover: rgba(255, 255, 255, 0.085);
-
   --green: #9cff72;
   --green-light: #c7ffad;
   --green-dark: #3f9d3d;
-
   --text: #f3f8f1;
   --muted: #91a097;
   --border: rgba(255, 255, 255, 0.1);
-
   --max-width: 1250px;
 }
 
@@ -45,7 +42,6 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-
   -webkit-font-smoothing: antialiased;
 }
 
@@ -101,13 +97,16 @@ a {
   border-radius: 18px;
 
   background: rgba(7, 17, 12, 0.78);
+
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 
   z-index: 1000;
 }
 
-/* LOGO */
+/* =========================================================
+   LOGO
+   ========================================================= */
 
 .logo {
   display: flex;
@@ -133,7 +132,9 @@ a {
   color: var(--green);
 }
 
-/* NAV LINKS */
+/* =========================================================
+   NAV LINKS
+   ========================================================= */
 
 .nav-links {
   display: flex;
@@ -144,12 +145,14 @@ a {
 .nav-links button {
   border: none;
   background: transparent;
+
   color: var(--muted);
 
   padding: 9px 13px;
   border-radius: 10px;
 
   cursor: pointer;
+
   transition:
     color 0.25s ease,
     background 0.25s ease;
@@ -160,7 +163,19 @@ a {
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* NAV BUTTON */
+/* =========================================================
+   NAV ACTIONS
+   ========================================================= */
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* =========================================================
+   NAV BUTTON
+   ========================================================= */
 
 .nav-button {
   display: flex;
@@ -179,6 +194,7 @@ a {
   font-weight: 750;
 
   cursor: pointer;
+  text-decoration: none;
 
   transition:
     transform 0.2s ease,
@@ -195,6 +211,126 @@ a {
 }
 
 /* =========================================================
+   LOGIN
+   ========================================================= */
+
+.nav-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 11px 18px;
+
+  border: 1px solid rgba(156, 255, 114, 0.35);
+  border-radius: 10px;
+
+  color: var(--green);
+  background: rgba(156, 255, 114, 0.06);
+
+  font-size: 13px;
+  font-weight: 700;
+
+  white-space: nowrap;
+  text-decoration: none;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.nav-login:hover {
+  background: rgba(156, 255, 114, 0.12);
+}
+
+/* =========================================================
+   LOGGED-IN USER
+   ========================================================= */
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  white-space: nowrap;
+}
+
+.nav-user button {
+  padding: 8px 12px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+
+  color: #c7d1ca;
+  background: rgba(255, 255, 255, 0.06);
+
+  font-size: 12px;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.nav-user button:hover {
+  color: var(--green);
+  background: rgba(156, 255, 114, 0.08);
+  border-color: rgba(156, 255, 114, 0.2);
+}
+
+/* =========================================================
+   DASHBOARD NAV BUTTON
+   ========================================================= */
+
+.nav-dashboard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 8px 13px;
+
+  border: 1px solid rgba(156, 255, 114, 0.35);
+  border-radius: 8px;
+
+  color: var(--green);
+  background: rgba(156, 255, 114, 0.06);
+
+  text-decoration: none;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  white-space: nowrap;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.nav-dashboard:hover {
+  background: rgba(156, 255, 114, 0.12);
+  border-color: rgba(156, 255, 114, 0.5);
+}
+
+/* =========================================================
+   ADMIN BADGE
+   ========================================================= */
+
+.nav-admin {
+  padding: 4px 7px;
+
+  border: 1px solid rgba(156, 255, 114, 0.25);
+  border-radius: 5px;
+
+  color: var(--green);
+
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+/* =========================================================
    HERO
    ========================================================= */
 
@@ -202,21 +338,26 @@ a {
   position: relative;
 
   min-height: 900px;
-  max-width: var(--max-width);
 
+  max-width: var(--max-width);
   margin: 0 auto;
+
   padding: 190px 40px 120px;
 
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
+
   align-items: center;
   gap: 60px;
 }
 
-/* WINDOWS DOWNLOAD */
+/* =========================================================
+   WINDOWS DOWNLOAD
+   ========================================================= */
 
 .windows-download {
   position: absolute;
+
   top: 108px;
   left: 40px;
 
@@ -249,13 +390,16 @@ a {
   transform: translateY(-2px);
 }
 
-/* Windows-style four pane logo */
+/* =========================================================
+   WINDOWS ICON
+   ========================================================= */
 
 .windows-icon {
   width: 21px;
   height: 21px;
 
   display: grid;
+
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
 
@@ -265,11 +409,13 @@ a {
 }
 
 .windows-icon span {
-  background: currentColor;
   display: block;
+  background: currentColor;
 }
 
-/* Download text */
+/* =========================================================
+   DOWNLOAD TEXT
+   ========================================================= */
 
 .download-content {
   display: flex;
@@ -280,6 +426,7 @@ a {
 
 .download-content small {
   color: var(--muted);
+
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 1.2px;
@@ -292,12 +439,16 @@ a {
 
 .download-arrow {
   margin-left: 4px;
+
   color: var(--green);
+
   font-size: 19px;
   line-height: 1;
 }
 
-/* HERO CONTENT */
+/* =========================================================
+   HERO CONTENT
+   ========================================================= */
 
 .hero-content {
   position: relative;
@@ -312,6 +463,7 @@ a {
   margin-bottom: 24px;
 
   color: var(--green);
+
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 2px;
@@ -322,6 +474,7 @@ a {
   height: 7px;
 
   border-radius: 50%;
+
   background: var(--green);
 
   box-shadow: 0 0 14px var(--green);
@@ -347,6 +500,7 @@ a {
 
   font-size: clamp(60px, 7vw, 105px);
   line-height: 0.94;
+
   letter-spacing: -5px;
   font-weight: 700;
 }
@@ -366,7 +520,9 @@ a {
   line-height: 1.7;
 }
 
-/* HERO BUTTONS */
+/* =========================================================
+   HERO BUTTONS
+   ========================================================= */
 
 .hero-buttons {
   display: flex;
@@ -398,6 +554,7 @@ a {
 
 .primary-button {
   border: 1px solid var(--green);
+
   background: var(--green);
   color: #071007;
 }
@@ -409,6 +566,7 @@ a {
 
 .secondary-button {
   border: 1px solid var(--border);
+
   background: transparent;
   color: var(--text);
 }
@@ -426,7 +584,9 @@ a {
   color: var(--green);
 }
 
-/* HERO STATS */
+/* =========================================================
+   HERO STATS
+   ========================================================= */
 
 .hero-stats {
   display: flex;
@@ -443,6 +603,7 @@ a {
 
 .hero-stats strong {
   color: var(--green);
+
   font-size: 12px;
   letter-spacing: 1px;
 }
@@ -475,10 +636,13 @@ a {
   border-radius: 50%;
 
   background: rgba(108, 255, 86, 0.08);
+
   filter: blur(70px);
 }
 
-/* IMPACT CARD */
+/* =========================================================
+   IMPACT CARD
+   ========================================================= */
 
 .impact-card {
   position: relative;
@@ -510,6 +674,7 @@ a {
   justify-content: space-between;
 
   color: var(--muted);
+
   font-size: 11px;
 }
 
@@ -517,7 +682,9 @@ a {
   color: var(--green);
 }
 
-/* SCORE */
+/* =========================================================
+   SCORE
+   ========================================================= */
 
 .score-circle {
   width: 190px;
@@ -543,7 +710,6 @@ a {
   content: "";
 
   position: absolute;
-
   inset: 8px;
 
   border-radius: 50%;
@@ -577,7 +743,9 @@ a {
   letter-spacing: 2px;
 }
 
-/* STATUS */
+/* =========================================================
+   STATUS
+   ========================================================= */
 
 .impact-status {
   display: flex;
@@ -612,6 +780,7 @@ a {
 
 .card-line {
   height: 1px;
+
   margin: 18px 0;
 
   background: var(--border);
@@ -619,7 +788,9 @@ a {
 
 .mini-stats {
   display: grid;
+
   grid-template-columns: repeat(3, 1fr);
+
   text-align: center;
 }
 
@@ -638,7 +809,9 @@ a {
   font-size: 9px;
 }
 
-/* FLOATING LEAVES */
+/* =========================================================
+   FLOATING LEAVES
+   ========================================================= */
 
 .floating-leaf {
   position: absolute;
@@ -652,6 +825,7 @@ a {
   border-radius: 18px;
 
   background: rgba(156, 255, 114, 0.08);
+
   border: 1px solid rgba(156, 255, 114, 0.13);
 
   backdrop-filter: blur(10px);
@@ -701,6 +875,7 @@ a {
 
 .section {
   max-width: var(--max-width);
+
   margin: 0 auto;
 
   padding: 150px 40px;
@@ -733,6 +908,7 @@ a {
 
   font-size: clamp(44px, 5vw, 70px);
   line-height: 1;
+
   letter-spacing: -3px;
 }
 
@@ -748,6 +924,7 @@ a {
 
 .about-grid {
   display: grid;
+
   grid-template-columns: 0.8fr 1.2fr;
 
   gap: 90px;
@@ -788,11 +965,15 @@ a {
   line-height: 1.6;
 }
 
-/* ABOUT CARDS */
+/* =========================================================
+   ABOUT CARDS
+   ========================================================= */
 
 .about-cards {
   display: grid;
+
   grid-template-columns: repeat(3, 1fr);
+
   gap: 13px;
 }
 
@@ -818,6 +999,7 @@ a {
   transform: translateY(-8px);
 
   background: var(--card-hover);
+
   border-color: rgba(156, 255, 114, 0.25);
 }
 
@@ -869,6 +1051,7 @@ a {
 
 .steps {
   display: grid;
+
   grid-template-columns: repeat(3, 1fr);
 
   gap: 20px;
@@ -929,7 +1112,9 @@ a {
 
 .feedback-card {
   display: grid;
+
   grid-template-columns: 1fr 0.8fr;
+
   align-items: center;
 
   gap: 70px;
@@ -958,7 +1143,9 @@ a {
   line-height: 1.8;
 }
 
-/* FEEDBACK VISUAL */
+/* =========================================================
+   FEEDBACK VISUAL
+   ========================================================= */
 
 .feedback-visual {
   display: flex;
@@ -1117,7 +1304,7 @@ footer p {
 }
 
 /* =========================================================
-   RESPONSIVE
+   RESPONSIVE — TABLET
    ========================================================= */
 
 @media (max-width: 950px) {
@@ -1161,7 +1348,6 @@ footer p {
 
   .about-grid {
     grid-template-columns: 1fr;
-
     gap: 60px;
   }
 
@@ -1177,9 +1363,17 @@ footer p {
   }
 }
 
+/* =========================================================
+   RESPONSIVE — MOBILE
+   ========================================================= */
+
 @media (max-width: 700px) {
   .navbar {
     top: 10px;
+  }
+
+  .nav-actions {
+    gap: 8px;
   }
 
   .nav-button {
@@ -1188,6 +1382,26 @@ footer p {
 
   .nav-button span {
     display: none;
+  }
+
+  .nav-user {
+    gap: 7px;
+  }
+
+  .nav-user > span:not(.nav-admin) {
+    display: none;
+  }
+
+  .nav-admin {
+    display: none;
+  }
+
+  .nav-dashboard {
+    padding: 8px 10px;
+  }
+
+  .nav-login {
+    padding: 9px 13px;
   }
 
   .hero {
@@ -1286,6 +1500,10 @@ footer p {
   }
 }
 
+/* =========================================================
+   RESPONSIVE — SMALL MOBILE
+   ========================================================= */
+
 @media (max-width: 420px) {
   .logo-text {
     font-size: 13px;
@@ -1329,84 +1547,4 @@ footer p {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.nav-login {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 11px 18px;
-  border: 1px solid rgba(156, 255, 114, 0.35);
-  border-radius: 10px;
-  color: #9cff72;
-  background: rgba(156, 255, 114, 0.06);
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.nav-login:hover {
-  background: rgba(156, 255, 114, 0.12);
-}
-
-.nav-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  white-space: nowrap;
-}
-
-.nav-user button {
-  padding: 8px 12px;
-  border-radius: 8px;
-  color: #c7d1ca;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 12px;
-}
-
-.nav-admin {
-  padding: 4px 7px;
-  border: 1px solid rgba(156, 255, 114, 0.25);
-  border-radius: 5px;
-  color: #9cff72;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1px;
-}
-.nav-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  white-space: nowrap;
-}
-
-.nav-user button {
-  padding: 8px 12px;
-  border-radius: 8px;
-  color: #c7d1ca;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 12px;
-}
-.nav-dashboard {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 13px;
-  border: 1px solid rgba(156, 255, 114, 0.35);
-  border-radius: 8px;
-  color: #9cff72;
-  background: rgba(156, 255, 114, 0.06);
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.nav-dashboard:hover {
-  background: rgba(156, 255, 114, 0.12);
 }
