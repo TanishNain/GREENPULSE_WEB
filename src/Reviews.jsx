@@ -1,12 +1,22 @@
 import "./Reviews.css";
 import { useEffect, useState } from "react";
 
-const API_URL = "https://greenpulse-web-tc0g.onrender.com";
+const API_URL =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:8000"
+    : "https://greenpulse-web-tc0g.onrender.com";
 const OWNER_TOKENS_KEY = "greenpulse_review_tokens";
+
+/* =========================================================
+   OWNER TOKEN HELPERS
+   ========================================================= */
 
 function getOwnerTokens() {
   try {
-    return JSON.parse(localStorage.getItem(OWNER_TOKENS_KEY)) || {};
+    return JSON.parse(
+      localStorage.getItem(OWNER_TOKENS_KEY)
+    ) || {};
   } catch {
     return {};
   }
@@ -25,6 +35,7 @@ function saveOwnerToken(reviewId, token) {
 
 function getOwnerToken(reviewId) {
   const tokens = getOwnerTokens();
+
   return tokens[reviewId] || null;
 }
 
@@ -39,40 +50,71 @@ function removeOwnerToken(reviewId) {
   );
 }
 
+/* =========================================================
+   REVIEWS PAGE
+   ========================================================= */
+
 function Reviews() {
   const [rating, setRating] = useState(0);
   const [name, setName] = useState("");
   const [review, setReview] = useState("");
 
   const [reviews, setReviews] = useState([]);
-  const [loadingReviews, setLoadingReviews] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
 
-  const [editingId, setEditingId] = useState(null);
+  const [loadingReviews, setLoadingReviews] =
+    useState(true);
+
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [editingId, setEditingId] =
+    useState(null);
+
+  /* =======================================================
+     LOAD REVIEWS
+     ======================================================= */
 
   const loadReviews = async () => {
-    try {
-      const response = await fetch(
-        `${API_URL}/api/reviews`
-      );
+  setLoadingReviews(true);
 
-      const data = await response.json();
+  try {
+    const response = await fetch(`${API_URL}/api/reviews`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
 
-      if (!response.ok) {
-        throw new Error("Failed to load reviews.");
-      }
-
-      setReviews(data.reviews || []);
-    } catch (error) {
-      console.error("Error loading reviews:", error);
-    } finally {
-      setLoadingReviews(false);
+    if (!response.ok) {
+      throw new Error(`Failed to load reviews (${response.status})`);
     }
-  };
+
+    const data = await response.json();
+
+    console.log("GREENPULSE REVIEWS API:", data);
+
+    const reviewList = Array.isArray(data)
+      ? data
+      : Array.isArray(data.reviews)
+        ? data.reviews
+        : [];
+
+    setReviews(reviewList);
+  } catch (error) {
+    console.error("Failed to load reviews:", error);
+    setReviews([]);
+  } finally {
+    setLoadingReviews(false);
+  }
+};
 
   useEffect(() => {
     loadReviews();
   }, []);
+
+  /* =======================================================
+     RESET FORM
+     ======================================================= */
 
   const resetForm = () => {
     setName("");
@@ -80,6 +122,10 @@ function Reviews() {
     setRating(0);
     setEditingId(null);
   };
+
+  /* =======================================================
+     SUBMIT / UPDATE REVIEW
+     ======================================================= */
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -90,23 +136,28 @@ function Reviews() {
     }
 
     if (!name.trim() || !review.trim()) {
-      alert("Please enter your name and review.");
+      alert(
+        "Please enter your name and review."
+      );
       return;
     }
 
     setSubmitting(true);
 
     try {
-      /*
-       * EDIT EXISTING REVIEW
-       */
+      /* ---------------------------------------------------
+         EDIT EXISTING REVIEW
+         --------------------------------------------------- */
+
       if (editingId !== null) {
-        const ownerToken = getOwnerToken(editingId);
+        const ownerToken =
+          getOwnerToken(editingId);
 
         if (!ownerToken) {
           alert(
             "This review cannot be edited from this browser because its ownership information is unavailable."
           );
+
           setSubmitting(false);
           return;
         }
@@ -115,9 +166,11 @@ function Reviews() {
           `${API_URL}/api/reviews/${editingId}`,
           {
             method: "PUT",
+
             headers: {
               "Content-Type": "application/json",
             },
+
             body: JSON.stringify({
               name: name.trim(),
               rating: rating,
@@ -131,11 +184,14 @@ function Reviews() {
 
         if (!response.ok) {
           throw new Error(
-            data.detail || "Failed to update review."
+            data.detail ||
+            "Failed to update review."
           );
         }
 
-        alert("Review updated successfully! 🌱");
+        alert(
+          "Review updated successfully! 🌱"
+        );
 
         resetForm();
 
@@ -144,16 +200,19 @@ function Reviews() {
         return;
       }
 
-      /*
-       * CREATE NEW REVIEW
-       */
+      /* ---------------------------------------------------
+         CREATE NEW REVIEW
+         --------------------------------------------------- */
+
       const response = await fetch(
         `${API_URL}/api/reviews`,
         {
           method: "POST",
+
           headers: {
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             name: name.trim(),
             rating: rating,
@@ -166,22 +225,28 @@ function Reviews() {
 
       if (!response.ok) {
         throw new Error(
-          data.detail || "Failed to submit review."
+          data.detail ||
+          "Failed to submit review."
         );
       }
 
-      /*
-       * Save the ownership token returned
-       * by the backend for this browser.
-       */
-      if (data.owner_token && data.review?.id) {
+      /* ---------------------------------------------------
+         SAVE OWNER TOKEN
+         --------------------------------------------------- */
+
+      if (
+        data.owner_token &&
+        data.review?.id
+      ) {
         saveOwnerToken(
           data.review.id,
           data.owner_token
         );
       }
 
-      alert("Review submitted successfully! 🌱");
+      alert(
+        "Review submitted successfully! 🌱"
+      );
 
       resetForm();
 
@@ -201,8 +266,13 @@ function Reviews() {
     }
   };
 
+  /* =======================================================
+     EDIT REVIEW
+     ======================================================= */
+
   const handleEdit = (item) => {
-    const ownerToken = getOwnerToken(item.id);
+    const ownerToken =
+      getOwnerToken(item.id);
 
     if (!ownerToken) {
       alert(
@@ -223,8 +293,13 @@ function Reviews() {
     });
   };
 
+  /* =======================================================
+     DELETE REVIEW
+     ======================================================= */
+
   const handleDelete = async (item) => {
-    const ownerToken = getOwnerToken(item.id);
+    const ownerToken =
+      getOwnerToken(item.id);
 
     if (!ownerToken) {
       alert(
@@ -234,9 +309,10 @@ function Reviews() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Delete this review permanently?"
-    );
+    const confirmed =
+      window.confirm(
+        "Delete this review permanently?"
+      );
 
     if (!confirmed) {
       return;
@@ -247,9 +323,11 @@ function Reviews() {
         `${API_URL}/api/reviews/${item.id}`,
         {
           method: "DELETE",
+
           headers: {
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             owner_token: ownerToken,
           }),
@@ -260,7 +338,8 @@ function Reviews() {
 
       if (!response.ok) {
         throw new Error(
-          data.detail || "Failed to delete review."
+          data.detail ||
+          "Failed to delete review."
         );
       }
 
@@ -270,7 +349,9 @@ function Reviews() {
         resetForm();
       }
 
-      alert("Review deleted successfully.");
+      alert(
+        "Review deleted successfully."
+      );
 
       await loadReviews();
     } catch (error) {
@@ -286,14 +367,19 @@ function Reviews() {
     }
   };
 
-  const reviewCount = reviews.length;
+  /* =======================================================
+     REVIEW STATISTICS
+     ======================================================= */
+
+  const reviewCount =
+    reviews.length;
 
   const averageRating =
     reviewCount > 0
       ? (
           reviews.reduce(
             (total, item) =>
-              total + item.rating,
+              total + Number(item.rating),
             0
           ) / reviewCount
         ).toFixed(1)
@@ -301,28 +387,44 @@ function Reviews() {
 
   const ratingCounts = {
     5: reviews.filter(
-      (item) => item.rating === 5
+      (item) =>
+        Number(item.rating) === 5
     ).length,
 
     4: reviews.filter(
-      (item) => item.rating === 4
+      (item) =>
+        Number(item.rating) === 4
     ).length,
 
     3: reviews.filter(
-      (item) => item.rating === 3
+      (item) =>
+        Number(item.rating) === 3
     ).length,
 
     2: reviews.filter(
-      (item) => item.rating === 2
+      (item) =>
+        Number(item.rating) === 2
     ).length,
 
     1: reviews.filter(
-      (item) => item.rating === 1
+      (item) =>
+        Number(item.rating) === 1
     ).length,
   };
 
+  const roundedAverage =
+    reviewCount > 0
+      ? Math.round(
+          Number(averageRating)
+        )
+      : 0;
+
   return (
     <div className="reviews-page">
+
+      {/* ===================================================
+          NAVBAR
+          =================================================== */}
 
       <nav className="reviews-navbar">
 
@@ -346,6 +448,10 @@ function Reviews() {
 
       </nav>
 
+      {/* ===================================================
+          HERO
+          =================================================== */}
+
       <section className="reviews-hero">
 
         <span className="reviews-eyebrow">
@@ -359,14 +465,22 @@ function Reviews() {
         </h1>
 
         <p>
-          Tell us what you think about GreenPulse.
-          Your feedback helps shape what the project
-          becomes next.
+          Tell us what you think about
+          GreenPulse. Your feedback helps
+          shape what the project becomes next.
         </p>
 
       </section>
 
+      {/* ===================================================
+          WRITE + SUMMARY
+          =================================================== */}
+
       <section className="review-layout">
+
+        {/* -------------------------------------------------
+            WRITE REVIEW
+            ------------------------------------------------- */}
 
         <form
           className="write-review-card"
@@ -382,26 +496,26 @@ function Reviews() {
             </span>
 
             <h2>
-              {editingId !== null
-                ? (
-                  <>
-                    Make your
-                    <br />
-                    <span>changes.</span>
-                  </>
-                )
-                : (
-                  <>
-                    How was your
-                    <br />
-                    <span>
-                      GreenPulse experience?
-                    </span>
-                  </>
-                )}
+              {editingId !== null ? (
+                <>
+                  Make your
+                  <br />
+                  <span>changes.</span>
+                </>
+              ) : (
+                <>
+                  How was your
+                  <br />
+                  <span>
+                    GreenPulse experience?
+                  </span>
+                </>
+              )}
             </h2>
 
           </div>
+
+          {/* RATING */}
 
           <div className="rating-area">
 
@@ -425,6 +539,9 @@ function Reviews() {
                         : ""
                     }
                     aria-label={`${star} star rating`}
+                    aria-pressed={
+                      star <= rating
+                    }
                   >
                     ★
                   </button>
@@ -434,48 +551,61 @@ function Reviews() {
             </div>
 
             <span className="rating-hint">
-
               {rating
                 ? `${rating} out of 5 stars`
                 : "Select a rating from 1 to 5"}
-
             </span>
 
           </div>
 
+          {/* NAME */}
+
           <div className="form-field">
 
-            <label>
+            <label htmlFor="review-name">
               Your name
             </label>
 
             <input
+              id="review-name"
               type="text"
               value={name}
               onChange={(event) =>
-                setName(event.target.value)
+                setName(
+                  event.target.value
+                )
               }
               placeholder="Enter your name"
+              autoComplete="name"
+              maxLength={100}
             />
 
           </div>
 
+          {/* REVIEW */}
+
           <div className="form-field">
 
-            <label>
+            <label htmlFor="review-message">
               Your review
             </label>
 
             <textarea
+              id="review-message"
               rows="6"
               value={review}
               onChange={(event) =>
-                setReview(event.target.value)
+                setReview(
+                  event.target.value
+                )
               }
               placeholder="Tell us what you think about GreenPulse..."
+              maxLength={5000}
             />
 
           </div>
+
+          {/* FORM BUTTONS */}
 
           <div className="review-form-actions">
 
@@ -484,15 +614,17 @@ function Reviews() {
               className="submit-review"
               disabled={submitting}
             >
+              <span>
+                {submitting
+                  ? "Saving..."
+                  : editingId !== null
+                    ? "Save changes"
+                    : "Submit review"}
+              </span>
 
-              {submitting
-                ? "Saving..."
-                : editingId !== null
-                  ? "Save changes"
-                  : "Submit review"}
-
-              <span>↗</span>
-
+              <span>
+                ↗
+              </span>
             </button>
 
             {editingId !== null && (
@@ -500,6 +632,7 @@ function Reviews() {
                 type="button"
                 className="cancel-edit"
                 onClick={resetForm}
+                disabled={submitting}
               >
                 Cancel
               </button>
@@ -508,14 +641,16 @@ function Reviews() {
           </div>
 
           <p className="review-note">
-
             {editingId !== null
               ? "Your changes will be saved to your GreenPulse review."
               : "Your review will be visible to the GreenPulse community."}
-
           </p>
 
         </form>
+
+        {/* -------------------------------------------------
+            COMMUNITY SUMMARY
+            ------------------------------------------------- */}
 
         <div className="review-summary">
 
@@ -537,25 +672,27 @@ function Reviews() {
 
             </div>
 
-            <div className="summary-stars">
-
+            <div
+              className="summary-stars"
+              aria-label={
+                reviewCount > 0
+                  ? `Average rating ${averageRating} out of 5`
+                  : "No ratings yet"
+              }
+            >
               {reviewCount > 0
                 ? [1, 2, 3, 4, 5]
                     .map((star) =>
                       star <=
-                      Math.round(
-                        Number(averageRating)
-                      )
+                      roundedAverage
                         ? "★"
                         : "☆"
                     )
                     .join(" ")
                 : "☆ ☆ ☆ ☆ ☆"}
-
             </div>
 
             <p>
-
               {reviewCount > 0
                 ? `${reviewCount} ${
                     reviewCount === 1
@@ -566,13 +703,15 @@ function Reviews() {
                   <>
                     No reviews yet.
                     <br />
-                    Be the first to share your experience.
+                    Be the first to share
+                    your experience.
                   </>
                 )}
-
             </p>
 
           </div>
+
+          {/* RATING DISTRIBUTION */}
 
           <div className="rating-bars">
 
@@ -603,7 +742,7 @@ function Reviews() {
                           width:
                             `${percentage}%`,
                         }}
-                      ></i>
+                      />
                     </div>
 
                   </div>
@@ -616,6 +755,10 @@ function Reviews() {
         </div>
 
       </section>
+
+      {/* ===================================================
+          EXISTING REVIEWS
+          =================================================== */}
 
       <section className="existing-reviews">
 
@@ -633,119 +776,164 @@ function Reviews() {
 
         </div>
 
-        {loadingReviews ? (
+        {/* LOADING */}
 
-          <div className="empty-reviews">
-
-            <div>🌱</div>
-
-            <h3>
-              Loading reviews...
-            </h3>
-
+        {loadingReviews && (
+          <div className="reviews-loading">
+            Loading community reviews...
           </div>
-
-        ) : reviews.length === 0 ? (
-
-          <div className="empty-reviews">
-
-            <div>🌱</div>
-
-            <h3>
-              No reviews yet
-            </h3>
-
-            <p>
-              Be the first person to leave
-              feedback about GreenPulse.
-            </p>
-
-          </div>
-
-        ) : (
-
-          <div className="reviews-list">
-
-            {reviews.map((item) => {
-
-              const isOwner =
-                Boolean(
-                  getOwnerToken(item.id)
-                );
-
-              return (
-                <article
-                  className="review-item"
-                  key={item.id}
-                >
-
-                  <div className="review-item-top">
-
-                    <div>
-
-                      <h3>
-                        {item.name}
-                      </h3>
-
-                      <span>
-                        {new Date(
-                          item.created_at
-                        ).toLocaleDateString()}
-                      </span>
-
-                    </div>
-
-                    <div className="review-item-stars">
-
-                      {"★".repeat(
-                        item.rating
-                      )}
-
-                      {"☆".repeat(
-                        5 - item.rating
-                      )}
-
-                    </div>
-
-                  </div>
-
-                  <p>
-                    {item.review}
-                  </p>
-
-                  {isOwner && (
-                    <div className="review-actions">
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleEdit(item)
-                        }
-                      >
-                        ✏️ Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDelete(item)
-                        }
-                      >
-                        🗑️ Delete
-                      </button>
-
-                    </div>
-                  )}
-
-                </article>
-              );
-            })}
-
-          </div>
-
         )}
 
+        {/* EMPTY */}
+
+        {!loadingReviews &&
+          reviews.length === 0 && (
+            <div className="empty-reviews">
+
+              <div>🌱</div>
+
+              <h3>
+                No reviews yet
+              </h3>
+
+              <p>
+                Be the first person to
+                leave feedback about
+                GreenPulse.
+              </p>
+
+            </div>
+          )}
+
+        {/* REVIEW LIST */}
+
+        {!loadingReviews &&
+          reviews.length > 0 && (
+            <div className="review-list">
+
+              {reviews.map((item) => {
+
+                const isOwner =
+                  Boolean(
+                    getOwnerToken(item.id)
+                  );
+
+                const itemRating =
+                  Number(item.rating);
+
+                const formattedDate =
+                  item.created_at
+                    ? new Date(
+                        item.created_at
+                      ).toLocaleDateString(
+                        undefined,
+                        {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        }
+                      )
+                    : "";
+
+                return (
+                  <article
+                    className="review-item"
+                    key={item.id}
+                  >
+
+                    {/* REVIEW HEADER */}
+
+                    <div className="review-item-header">
+
+                      <div className="review-author">
+
+                        <h3 className="review-author-name">
+                          {item.name}
+                        </h3>
+
+                        <div className="review-author-meta">
+                          GreenPulse community
+                          {formattedDate
+                            ? ` • ${formattedDate}`
+                            : ""}
+                        </div>
+
+                      </div>
+
+                      <div
+                        className="review-rating"
+                        aria-label={`${itemRating} out of 5 stars`}
+                      >
+                        {"★".repeat(
+                          itemRating
+                        )}
+
+                        {"☆".repeat(
+                          Math.max(
+                            0,
+                            5 - itemRating
+                          )
+                        )}
+                      </div>
+
+                    </div>
+
+                    {/* FULL REVIEW */}
+
+                    <p className="review-text">
+                      {item.review}
+                    </p>
+
+                    {/* REVIEW FOOTER */}
+
+                    <div className="review-item-footer">
+
+                      <span className="review-date">
+                        {formattedDate
+                          ? `Posted ${formattedDate}`
+                          : "Community review"}
+                      </span>
+
+                      {isOwner && (
+                        <div className="review-actions">
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleEdit(item)
+                            }
+                            aria-label={`Edit review by ${item.name}`}
+                          >
+                            ✏️ Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDelete(item)
+                            }
+                            aria-label={`Delete review by ${item.name}`}
+                          >
+                            🗑️ Delete
+                          </button>
+
+                        </div>
+                      )}
+
+                    </div>
+
+                  </article>
+                );
+              })}
+
+            </div>
+          )}
+
       </section>
+
+      {/* ===================================================
+          FINAL CTA
+          =================================================== */}
 
       <section className="reviews-final">
 
@@ -758,8 +946,9 @@ function Reviews() {
         </h2>
 
         <p>
-          Every piece of feedback gives the
-          project another direction to grow.
+          Every piece of feedback gives
+          the project another direction
+          to grow.
         </p>
 
         <a
@@ -772,6 +961,10 @@ function Reviews() {
 
       </section>
 
+      {/* ===================================================
+          FOOTER
+          =================================================== */}
+
       <footer className="reviews-footer">
 
         <div>
@@ -780,8 +973,8 @@ function Reviews() {
         </div>
 
         <p>
-          Making environmental impact easier
-          to understand.
+          Making environmental impact
+          easier to understand.
         </p>
 
         <span>
