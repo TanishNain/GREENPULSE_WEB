@@ -1317,6 +1317,7 @@ def register(request: RegisterRequest):
 # ============================================================
 
 @app.post("/api/login")
+@app.post("/api/auth/login")
 def login(request: LoginRequest):
     username = request.username.strip()
 
