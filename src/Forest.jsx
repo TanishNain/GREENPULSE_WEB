@@ -256,7 +256,7 @@ export default function Forest() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("greenpulse_token");
 
   async function loadForest() {
     try {
