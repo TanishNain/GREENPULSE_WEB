@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./Forest.css";
-
+import { getToken, logout } from "./auth.js";
 const API_URL =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1"
@@ -256,54 +256,86 @@ export default function Forest() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const token = localStorage.getItem("greenpulse_token");
+  const token = getToken();
 
-  async function loadForest() {
+async function loadForest() {
+  try {
+    setLoading(true);
+    setError("");
+
+    const token = getToken();
+
+    if (!token) {
+      logout();
+      return;
+    }
+
+    const forestResponse = await fetch(
+      `${API_URL}/api/forest?token=${encodeURIComponent(token)}`
+    );
+
+    if (forestResponse.status === 401) {
+      logout();
+      return;
+    }
+
+    if (!forestResponse.ok) {
+      throw new Error(
+        `Forest API failed with ${forestResponse.status}`
+      );
+    }
+
+    const forestData = await forestResponse.json();
+    setForest(forestData);
+
+    // Weather and season are optional atmosphere data.
+    // They must NEVER prevent the forest itself from loading.
     try {
-      setLoading(true);
-      setError("");
-
-      const headers = token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : {};
-
-      const [forestResponse, weatherResponse, seasonResponse] =
-        await Promise.all([
-          fetch(`${API_URL}/api/forest`, { headers }),
-          fetch(`${API_URL}/api/forest/weather`),
-          fetch(`${API_URL}/api/forest/season`),
-        ]);
-
-      if (forestResponse.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        window.location.href = "/auth";
-        return;
-      }
-
-      if (!forestResponse.ok) {
-        throw new Error("Unable to load forest");
-      }
-
-      const forestData = await forestResponse.json();
-      setForest(forestData);
+      const weatherResponse = await fetch(
+        `${API_URL}/api/forest/weather`
+      );
 
       if (weatherResponse.ok) {
         setWeather(await weatherResponse.json());
+      } else {
+        console.warn(
+          "Weather unavailable:",
+          weatherResponse.status
+        );
       }
+    } catch (weatherError) {
+      console.warn(
+        "Weather request failed:",
+        weatherError
+      );
+    }
+
+    try {
+      const seasonResponse = await fetch(
+        `${API_URL}/api/forest/season`
+      );
 
       if (seasonResponse.ok) {
         setSeason(await seasonResponse.json());
+      } else {
+        console.warn(
+          "Season unavailable:",
+          seasonResponse.status
+        );
       }
-    } catch (err) {
-      console.error("Forest loading failed:", err);
-      setError("Your forest could not be loaded right now.");
-    } finally {
-      setLoading(false);
+    } catch (seasonError) {
+      console.warn(
+        "Season request failed:",
+        seasonError
+      );
     }
+  } catch (err) {
+    console.error("Forest loading failed:", err);
+    setError("Your forest could not be loaded right now.");
+  } finally {
+    setLoading(false);
   }
+}
 
   useEffect(() => {
     loadForest();
