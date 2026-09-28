@@ -48,16 +48,20 @@ function App() {
   </Link>
 
   {user ? (
-    <div className="nav-user">
-      <span>🌱 {user.username}</span>
+  <div className="nav-user">
+    <Link to="/dashboard" className="nav-dashboard">
+      Dashboard
+    </Link>
 
-      {user.role === "admin" && (
-        <span className="nav-admin">ADMIN</span>
-      )}
+    <span>🌱 {user.username}</span>
 
-      <button onClick={logout}>Log out</button>
-    </div>
-  ) : (
+    {user.role === "admin" && (
+      <span className="nav-admin">ADMIN</span>
+    )}
+
+    <button onClick={logout}>Log out</button>
+  </div>
+) : (
     <Link to="/auth" className="nav-login">
       Log in
     </Link>
