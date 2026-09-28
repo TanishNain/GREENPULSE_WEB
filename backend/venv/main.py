@@ -1199,6 +1199,7 @@ def impact():
 # ============================================================
 
 @app.post("/api/register")
+@app.post("/api/auth/register")
 def register(request: RegisterRequest):
     username = request.username.strip()
 
