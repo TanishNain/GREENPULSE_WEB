@@ -1,12 +1,19 @@
+/* ============================================================
+   GREEN PULSE — CINEMATIC FOREST
+   ============================================================ */
+
 * {
   box-sizing: border-box;
 }
 
-.forest-app {
-  position: fixed;
-  inset: 0;
+.forest-game {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  height: 100vh;
   overflow: hidden;
-  background: #06130e;
+  isolation: isolate;
+  background: #06110d;
   color: white;
   font-family:
     Inter,
@@ -16,1454 +23,1725 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+  cursor: default;
 }
 
-/* =========================================================
-   CINEMATIC BACKGROUND
-   ========================================================= */
+/* ============================================================
+   SKY
+   ============================================================ */
 
-.forest-cinematic {
+.sky {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.23;
-  filter: saturate(1.12) contrast(1.08);
-  pointer-events: none;
-}
-
-.forest-light-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  transition:
-    background 1.8s ease,
-    opacity 1.8s ease;
-}
-
-.forest-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      ellipse at center,
-      transparent 35%,
-      rgba(0, 0, 0, 0.2) 75%,
-      rgba(0, 0, 0, 0.7)
-    );
-}
-
-/* DAY */
-
-.forest-phase-dawn .forest-light-layer {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 151, 70, 0.2),
-      rgba(255, 209, 132, 0.06) 55%,
-      rgba(28, 73, 51, 0.12)
-    );
-}
-
-.forest-phase-morning .forest-light-layer {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 238, 187, 0.12),
-      rgba(255, 255, 255, 0.02) 50%,
-      rgba(26, 80, 52, 0.08)
-    );
-}
-
-.forest-phase-noon .forest-light-layer {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.08),
-      rgba(255, 255, 225, 0.015) 55%,
-      rgba(14, 70, 42, 0.08)
-    );
-}
-
-.forest-phase-evening .forest-light-layer {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 151, 68, 0.3),
-      rgba(211, 91, 38, 0.13) 45%,
-      rgba(47, 35, 25, 0.18)
-    );
-}
-
-/* REAL NIGHT — intentionally dark */
-
-.forest-phase-night .forest-light-layer {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(0, 5, 13, 0.86),
-      rgba(1, 10, 9, 0.76),
-      rgba(0, 3, 4, 0.9)
-    );
-}
-
-.forest-phase-night .forest-cinematic {
-  opacity: 0.05;
-  filter:
-    brightness(0.22)
-    saturate(0.55)
-    contrast(1.2);
-}
-
-/* =========================================================
-   TOP BAR
-   ========================================================= */
-
-.forest-topbar {
-  position: absolute;
-  z-index: 30;
-  top: 18px;
-  left: 18px;
-  right: 18px;
-  height: 58px;
-
-  display: flex;
-  align-items: center;
-  gap: 15px;
-
-  padding: 8px 14px;
-
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 17px;
-
-  background: rgba(4, 16, 12, 0.48);
-  backdrop-filter: blur(18px);
-}
-
-.hamburger {
-  width: 42px;
-  height: 42px;
-
-  border: 0;
-  border-radius: 12px;
-
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  align-items: center;
-
-  cursor: pointer;
-
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.hamburger span {
-  width: 19px;
-  height: 2px;
-  border-radius: 5px;
-  background: white;
-}
-
-.forest-brand {
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
-}
-
-.forest-brand strong {
-  letter-spacing: 0.13em;
-  font-size: 14px;
-}
-
-.forest-brand span {
-  margin-top: 5px;
-  font-size: 8px;
-  letter-spacing: 0.3em;
-  opacity: 0.55;
-}
-
-.forest-status {
-  margin-left: auto;
-
-  display: flex;
-  gap: 8px;
-
-  padding: 8px 12px;
-
-  border-radius: 999px;
-
-  background: rgba(255, 255, 255, 0.08);
-
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.76);
-}
-
-/* =========================================================
-   SIDEBAR
-   ========================================================= */
-
-.forest-sidebar {
-  position: absolute;
-  z-index: 50;
-  top: 90px;
-  left: 18px;
-
-  width: 270px;
-  max-height: calc(100vh - 125px);
-
-  padding: 16px;
-
-  overflow-y: auto;
-
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-
-  background: rgba(3, 15, 11, 0.82);
-  backdrop-filter: blur(24px);
-
-  transform: translateX(-125%);
-  opacity: 0;
-
-  transition:
-    transform 0.3s ease,
-    opacity 0.3s ease;
-
-  box-shadow:
-    0 25px 80px rgba(0, 0, 0, 0.4);
-}
-
-.forest-sidebar-open {
-  transform: translateX(0);
-  opacity: 1;
-}
-
-.sidebar-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  margin-bottom: 12px;
-}
-
-.sidebar-heading span {
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  opacity: 0.55;
-}
-
-.sidebar-heading button {
-  width: 30px;
-  height: 30px;
-
-  border: 0;
-  border-radius: 9px;
-
-  color: white;
-  background: rgba(255, 255, 255, 0.08);
-
-  cursor: pointer;
-  font-size: 18px;
-}
-
-.forest-sidebar > button {
-  width: 100%;
-
-  margin-bottom: 7px;
-  padding: 12px 13px;
-
-  border: 1px solid transparent;
-  border-radius: 11px;
-
-  text-align: left;
-
-  color: rgba(255, 255, 255, 0.86);
-  background: rgba(255, 255, 255, 0.045);
-
-  cursor: pointer;
-
-  transition:
-    transform 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.forest-sidebar > button:hover {
-  transform: translateX(4px);
-
-  background: rgba(109, 198, 123, 0.13);
-  border-color: rgba(130, 224, 143, 0.25);
-}
-
-.sidebar-divider {
-  height: 1px;
-  margin: 13px 0;
-
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.sidebar-tip {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-
-  margin-top: 14px;
-  padding: 12px;
-
-  border-radius: 12px;
-
-  background: rgba(255, 255, 255, 0.045);
-
-  font-size: 10px;
-  line-height: 1.5;
-}
-
-.sidebar-tip strong {
-  color: white;
-}
-
-.sidebar-tip span {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* =========================================================
-   WORLD
-   ========================================================= */
-
-.forest-world-window {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-
-  overflow: hidden;
-}
-
-.forest-world {
-  position: absolute;
-  left: 0;
-  top: 0;
-
-  height: 100%;
-
-  transition: transform 0.35s ease-out;
-}
-
-/* =========================================================
-   DISTANCE
-   ========================================================= */
-
-.distant-hills {
-  position: absolute;
-  left: 0;
-  top: 19%;
-
-  width: 100%;
-  height: 38%;
+  z-index: -20;
 
   background:
     radial-gradient(
-      ellipse at 20% 70%,
-      rgba(16, 63, 43, 0.8) 0 18%,
-      transparent 19%
+      circle at 51% 38%,
+      rgba(251, 209, 124, 0.5),
+      transparent 16%
     ),
+    linear-gradient(
+      180deg,
+      #0b2630 0%,
+      #123b3a 31%,
+      #29534a 57%,
+      #102a1d 100%
+    );
+
+  transition:
+    background 2s ease,
+    filter 2s ease;
+}
+
+.forest-game.night .sky {
+  background:
     radial-gradient(
-      ellipse at 48% 72%,
-      rgba(10, 53, 37, 0.84) 0 20%,
-      transparent 21%
+      circle at 50% 38%,
+      rgba(85, 126, 170, 0.18),
+      transparent 22%
     ),
-    radial-gradient(
-      ellipse at 76% 68%,
-      rgba(14, 62, 40, 0.8) 0 23%,
-      transparent 24%
+    linear-gradient(
+      180deg,
+      #020711 0%,
+      #07151c 45%,
+      #0b211b 100%
     );
 }
 
-.deep-canopy {
-  position: absolute;
-  top: 0;
+.forest-game.sunset .sky {
+  background:
+    radial-gradient(
+      circle at 53% 43%,
+      rgba(255, 165, 80, 0.8),
+      transparent 18%
+    ),
+    linear-gradient(
+      180deg,
+      #172936 0%,
+      #623c38 45%,
+      #16271c 100%
+    );
+}
 
-  width: 55%;
-  height: 32%;
+.forest-game.dawn .sky {
+  background:
+    radial-gradient(
+      circle at 52% 46%,
+      rgba(255, 213, 144, 0.65),
+      transparent 17%
+    ),
+    linear-gradient(
+      180deg,
+      #243743,
+      #617160 52%,
+      #173024
+    );
+}
+
+/* ============================================================
+   SUN
+   ============================================================ */
+
+.sun {
+  position: absolute;
+  z-index: -17;
+
+  width: 190px;
+  height: 190px;
+
+  left: 50%;
+  top: 30%;
+
+  transform: translate(-50%, -50%);
 
   border-radius: 50%;
 
-  filter: blur(2px);
   background:
     radial-gradient(
       circle,
-      rgba(4, 36, 23, 0.98) 0 40%,
-      rgba(5, 27, 19, 0.9) 60%,
-      transparent 70%
+      #fff9d4 0%,
+      #ffe5a1 28%,
+      rgba(255, 214, 127, 0.5) 48%,
+      transparent 72%
+    );
+
+  filter: blur(1px);
+
+  opacity: 0.9;
+
+  transition: opacity 2s ease;
+}
+
+.night .sun {
+  opacity: 0;
+}
+
+/* ============================================================
+   MOON
+   ============================================================ */
+
+.moon {
+  position: absolute;
+  z-index: -16;
+
+  width: 110px;
+  height: 110px;
+
+  right: 14%;
+  top: 15%;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle at 37% 35%,
+      #fff,
+      #d8e9e7 48%,
+      #9db4b6 100%
+    );
+
+  box-shadow:
+    0 0 30px rgba(202, 239, 255, 0.35),
+    0 0 90px rgba(140, 200, 230, 0.12);
+
+  opacity: 0;
+
+  transition: opacity 2s ease;
+}
+
+.night .moon {
+  opacity: 0.92;
+}
+
+/* ============================================================
+   STARS
+   ============================================================ */
+
+.stars {
+  position: absolute;
+  inset: 0;
+  z-index: -15;
+
+  pointer-events: none;
+
+  opacity: 0;
+
+  transition: opacity 2s ease;
+}
+
+.night .stars {
+  opacity: 1;
+}
+
+.stars i {
+  position: absolute;
+
+  width: 2px;
+  height: 2px;
+
+  border-radius: 50%;
+
+  background: white;
+
+  box-shadow: 0 0 7px white;
+
+  animation: twinkle 3s infinite ease-in-out;
+}
+
+.stars i:nth-child(1) {
+  left: 9%;
+  top: 14%;
+}
+
+.stars i:nth-child(2) {
+  left: 17%;
+  top: 29%;
+}
+
+.stars i:nth-child(3) {
+  left: 27%;
+  top: 11%;
+}
+
+.stars i:nth-child(4) {
+  left: 39%;
+  top: 20%;
+}
+
+.stars i:nth-child(5) {
+  left: 48%;
+  top: 8%;
+}
+
+.stars i:nth-child(6) {
+  left: 57%;
+  top: 25%;
+}
+
+.stars i:nth-child(7) {
+  left: 69%;
+  top: 13%;
+}
+
+.stars i:nth-child(8) {
+  left: 81%;
+  top: 25%;
+}
+
+.stars i:nth-child(9) {
+  left: 91%;
+  top: 9%;
+}
+
+.stars i:nth-child(10) {
+  left: 73%;
+  top: 37%;
+}
+
+.stars i:nth-child(n + 11) {
+  left: calc((var(--i, 1) * 13%) % 100%);
+  top: calc((var(--i, 1) * 19%) % 45%);
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.8);
+  }
+}
+
+/* ============================================================
+   CINEMATIC LIGHT
+   ============================================================ */
+
+.god-rays {
+  position: absolute;
+  inset: -20%;
+
+  z-index: -8;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      112deg,
+      transparent 36%,
+      rgba(255, 236, 174, 0.09) 42%,
+      transparent 48%
+    ),
+    linear-gradient(
+      74deg,
+      transparent 45%,
+      rgba(255, 238, 184, 0.08) 49%,
+      transparent 54%
+    );
+
+  filter: blur(8px);
+
+  transform: translateX(var(--mx)) translateY(var(--my));
+
+  animation: rays 13s ease-in-out infinite alternate;
+}
+
+.night .god-rays {
+  opacity: 0.1;
+}
+
+@keyframes rays {
+  from {
+    transform: translate3d(-15px, 0, 0);
+  }
+
+  to {
+    transform: translate3d(20px, -10px, 0);
+  }
+}
+
+.light-haze {
+  position: absolute;
+  inset: 0;
+
+  z-index: -7;
+
+  pointer-events: none;
+
+  background:
+    radial-gradient(
+      ellipse at 50% 65%,
+      rgba(168, 214, 181, 0.12),
+      transparent 40%
     );
 }
 
-.canopy-a {
-  left: -8%;
-}
+/* ============================================================
+   MOUNTAINS
+   ============================================================ */
 
-.canopy-b {
-  right: -7%;
-}
-
-/* =========================================================
-   TREES
-   ========================================================= */
-
-.forest-tree {
+.mountains {
   position: absolute;
-  bottom: 27%;
-  z-index: 7;
 
-  width: 130px;
+  left: -5%;
+  right: -5%;
+  bottom: 29%;
+
+  height: 40%;
+
+  z-index: -10;
+
+  clip-path: polygon(
+    0 100%,
+    0 66%,
+    10% 48%,
+    18% 65%,
+    28% 34%,
+    36% 58%,
+    48% 28%,
+    60% 62%,
+    72% 39%,
+    82% 59%,
+    92% 31%,
+    100% 60%,
+    100% 100%
+  );
+}
+
+.mountains-far {
+  background: rgba(16, 48, 48, 0.5);
+
+  transform:
+    translate3d(
+      calc(var(--mx) * 0.2),
+      calc(var(--my) * 0.1),
+      0
+    );
+}
+
+.mountains-mid {
+  bottom: 24%;
+
+  height: 35%;
+
+  background: rgba(10, 38, 29, 0.78);
+
+  transform:
+    translate3d(
+      calc(var(--mx) * -0.4),
+      calc(var(--my) * -0.2),
+      0
+    );
+}
+
+/* ============================================================
+   REAL ONLINE FOREST BACKGROUND
+   ============================================================ */
+
+.forest-photo {
+  position: absolute;
+
+  width: 115%;
+  height: 80%;
+
+  left: 50%;
+  bottom: 10%;
+
+  z-index: -6;
+
+  background-position: center;
+  background-size: cover;
+
+  opacity: 0.48;
+
+  mix-blend-mode: normal;
+
+  filter:
+    saturate(0.9)
+    contrast(1.12)
+    brightness(0.58);
+
+  pointer-events: none;
+
+  transition: transform 0.25s ease-out;
+}
+
+.night .forest-photo {
+  filter:
+    saturate(0.55)
+    contrast(1.15)
+    brightness(0.25);
+}
+
+/* ============================================================
+   TREE LAYERS
+   ============================================================ */
+
+.tree-layer {
+  position: absolute;
+  inset: 0;
+
+  z-index: -3;
+
+  pointer-events: none;
+
+  transition: transform 0.25s ease-out;
+}
+
+.generated-tree {
+  position: absolute;
+
+  bottom: 31%;
+
+  width: 90px;
+  height: 260px;
+
+  filter: blur(0.5px);
 }
 
 .tree-trunk {
   position: absolute;
+
   bottom: 0;
-  left: 49px;
+  left: 43%;
 
-  width: 31px;
-  height: 72%;
-
-  border-radius: 45% 45% 15% 15%;
+  width: 15%;
+  height: 70%;
 
   background:
     linear-gradient(
       90deg,
-      #24180f 0%,
-      #543b23 22%,
-      #745333 48%,
-      #352315 75%,
-      #1d130d 100%
+      #182219,
+      #4c5033,
+      #181b13
     );
 
-  box-shadow:
-    inset 5px 0 rgba(255, 255, 255, 0.08),
-    10px 0 22px rgba(0, 0, 0, 0.24);
+  border-radius: 50%;
+
+  transform: skewX(-5deg);
 }
 
 .tree-crown {
   position: absolute;
-  left: -45px;
+
+  left: 0;
   top: 0;
 
-  width: 220px;
-  height: 180px;
-}
-
-.tree-crown i {
-  position: absolute;
-
-  display: block;
-
-  width: 115px;
-  height: 105px;
-
-  border-radius: 50%;
+  width: 100%;
+  height: 55%;
 
   background:
     radial-gradient(
-      circle at 35% 30%,
-      rgba(64, 133, 68, 0.96),
-      rgba(18, 76, 41, 0.98) 58%,
-      rgba(5, 42, 25, 1)
+      circle at 50% 30%,
+      #426c48,
+      #173d2b 58%,
+      #092116 100%
     );
 
-  box-shadow:
-    inset -15px -20px 35px rgba(0, 0, 0, 0.25);
+  clip-path: polygon(
+    50% 0,
+    76% 19%,
+    68% 32%,
+    92% 50%,
+    70% 55%,
+    86% 75%,
+    55% 67%,
+    50% 100%,
+    39% 68%,
+    13% 80%,
+    27% 56%,
+    4% 49%,
+    30% 32%,
+    22% 18%
+  );
 }
 
-.tree-crown i:nth-child(1) {
-  left: 48px;
-  top: 0;
+.tree-layer-front {
+  z-index: -1;
 }
 
-.tree-crown i:nth-child(2) {
-  left: 0;
-  top: 38px;
-}
-
-.tree-crown i:nth-child(3) {
-  left: 94px;
-  top: 38px;
-}
-
-.tree-crown i:nth-child(4) {
-  left: 50px;
-  top: 70px;
-}
-
-/* =========================================================
-   RIVER
-   ========================================================= */
-
-.river {
+.giant-tree {
   position: absolute;
-  left: 3100px;
-  bottom: 18%;
-  width: 1650px;
-  height: 165px;
+
+  bottom: -3%;
+
+  width: 170px;
+  height: 650px;
 
   transform:
-    rotate(-2deg)
-    skewX(-12deg);
+    scale(var(--tree-scale))
+    translate3d(0, 0, 0);
 
-  overflow: hidden;
+  transform-origin: bottom center;
 
-  border-top:
-    3px solid rgba(198, 241, 255, 0.24);
+  opacity: 0.9;
+}
 
-  border-bottom:
-    3px solid rgba(4, 38, 47, 0.45);
+.giant-trunk {
+  position: absolute;
+
+  bottom: 0;
+  left: 39%;
+
+  width: 26%;
+  height: 75%;
+
+  border-radius: 45% 45% 8% 8%;
 
   background:
     linear-gradient(
-      180deg,
-      #3b93a7,
-      #155a70 48%,
-      #0c4051
+      90deg,
+      #080e09 0%,
+      #263020 28%,
+      #3c4430 47%,
+      #151b11 68%,
+      #050a07 100%
     );
 
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.3);
+    inset 7px 0 12px rgba(255, 255, 255, 0.035);
 }
 
-.river::before,
-.river::after {
-  content: "";
+.giant-crown {
   position: absolute;
-  left: -10%;
-  width: 120%;
-  height: 3px;
-
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 35px,
-      rgba(255, 255, 255, 0.42) 36px 82px,
-      transparent 83px 120px
-    );
-
-  animation: water-flow 3s linear infinite;
-}
-
-.river::before {
-  top: 35%;
-}
-
-.river::after {
-  top: 67%;
-  animation-duration: 4.2s;
-}
-
-.river-highlight {
-  position: absolute;
-  left: 10%;
-  top: 18%;
-
-  width: 40%;
-  height: 2px;
-
-  background: rgba(255, 255, 255, 0.55);
-
-  transform: skewX(-25deg);
-
-  opacity: 0.5;
-}
-
-.river-highlight-2 {
-  left: 58%;
-  top: 53%;
-  width: 24%;
-}
-
-@keyframes water-flow {
-  from {
-    transform: translateX(-120px);
-  }
-
-  to {
-    transform: translateX(120px);
-  }
-}
-
-.river-bank {
-  position: absolute;
-  bottom: 18%;
-
-  width: 850px;
-  height: 70px;
-
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      ellipse,
-      #735a35,
-      #473923 65%,
-      transparent 70%
-    );
-}
-
-.river-bank-a {
-  left: 2920px;
-  transform: rotate(4deg);
-}
-
-.river-bank-b {
-  left: 4650px;
-  transform: rotate(-3deg);
-}
-
-/* =========================================================
-   GROUND
-   ========================================================= */
-
-.forest-ground {
-  position: absolute;
-  left: 0;
-  bottom: 0;
 
   width: 100%;
-  height: 29%;
+  height: 65%;
+
+  top: 0;
 
   background:
     radial-gradient(
-      ellipse at 40% 0%,
-      rgba(73, 116, 50, 0.75),
-      transparent 38%
+      ellipse at 50% 30%,
+      #214e35,
+      #0c2a1d 55%,
+      #03120c 100%
+    );
+
+  clip-path: polygon(
+    50% 0,
+    75% 13%,
+    67% 25%,
+    92% 39%,
+    75% 50%,
+    100% 69%,
+    68% 66%,
+    74% 89%,
+    51% 74%,
+    36% 100%,
+    31% 76%,
+    4% 85%,
+    19% 61%,
+    0 54%,
+    27% 37%,
+    15% 23%,
+    37% 20%
+  );
+}
+
+/* ============================================================
+   GROUND
+   ============================================================ */
+
+.ground {
+  position: absolute;
+
+  left: -5%;
+  right: -5%;
+  bottom: -5%;
+
+  height: 43%;
+
+  z-index: 0;
+
+  background:
+    radial-gradient(
+      ellipse at 50% 5%,
+      rgba(80, 115, 68, 0.55),
+      transparent 37%
     ),
     linear-gradient(
       180deg,
-      #263f24,
-      #15291b 45%,
-      #09160e
+      #193523 0%,
+      #0b2117 48%,
+      #040d09 100%
     );
 
-  border-top:
-    2px solid rgba(104, 150, 75, 0.2);
+  border-radius: 50% 50% 0 0 / 10% 10% 0 0;
+
+  box-shadow:
+    0 -35px 90px rgba(5, 20, 10, 0.65);
 }
 
-.grass-blade {
+.ground-glow {
   position: absolute;
-  z-index: 9;
-
-  width: 3px;
-  height: 20px;
-
-  transform-origin: bottom;
-
-  border-radius: 100%;
+  inset: 0;
 
   background:
-    linear-gradient(
-      180deg,
-      #72a65a,
-      #244d2d
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(195, 231, 178, 0.13),
+      transparent 42%
     );
+}
+
+.forest-path {
+  position: absolute;
+
+  left: 50%;
+  top: -5%;
+
+  width: 28%;
+  height: 115%;
+
+  transform:
+    translateX(-50%)
+    perspective(500px)
+    rotateX(30deg);
+
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(105, 79, 45, 0.75),
+      rgba(57, 47, 31, 0.8) 45%,
+      transparent 70%
+    );
+
+  filter: blur(2px);
 
   opacity: 0.8;
 }
 
-/* =========================================================
-   CLEAN WILDLIFE SYSTEM
-   ========================================================= */
-
-.wildlife {
+.grass-blades {
   position: absolute;
-  bottom: 27%;
+  inset: 0;
 
-  z-index: 18;
-
-  padding: 0;
-
-  border: 0;
-  background: transparent;
-
-  cursor: pointer;
-
-  transform-origin: bottom center;
-
-  transition:
-    left 0.7s ease,
-    transform 0.22s ease;
+  overflow: hidden;
 }
 
-.wildlife:hover {
-  transform:
-    translateY(-8px)
-    scale(1.045);
-}
-
-.wildlife:focus-visible {
-  outline: 2px solid white;
-  outline-offset: 7px;
-}
-
-/*
-  The shadow makes the animal feel attached to the ground.
-*/
-
-.wildlife-ground-shadow {
-  position: absolute;
-  left: 10%;
-  bottom: -3px;
-
-  width: 80%;
-  height: 15px;
-
-  border-radius: 50%;
-
-  background: rgba(0, 0, 0, 0.48);
-
-  filter: blur(5px);
-
-  z-index: -1;
-}
-
-.wildlife-sprite {
-  display: block;
-
-  width: 100%;
-  height: 100%;
-
-  object-fit: contain;
-
-  object-position: bottom center;
-
-  /*
-    IMPORTANT:
-    transparent asset only.
-    Never use object-fit: cover for wildlife.
-  */
-
-  filter:
-    drop-shadow(0 8px 5px rgba(0, 0, 0, 0.42));
-
-  user-select: none;
-  pointer-events: none;
-}
-
-.wildlife-name {
+.grass-blades span {
   position: absolute;
 
-  left: 50%;
-  bottom: calc(100% + 5px);
+  bottom: 0;
 
-  transform: translateX(-50%);
+  width: 2px;
 
-  white-space: nowrap;
+  background: linear-gradient(
+    180deg,
+    rgba(98, 144, 81, 0.8),
+    rgba(20, 51, 27, 0.8)
+  );
 
-  padding: 5px 8px;
+  transform-origin: bottom;
 
-  border-radius: 7px;
+  animation: grassSway 2.5s ease-in-out infinite alternate;
+}
 
-  color: white;
-  background: rgba(0, 0, 0, 0.56);
+@keyframes grassSway {
+  from {
+    transform: rotate(-4deg);
+  }
 
-  backdrop-filter: blur(7px);
+  to {
+    transform: rotate(5deg);
+  }
+}
 
-  font-size: 9px;
-  letter-spacing: 0.06em;
+/* ============================================================
+   MIST
+   ============================================================ */
 
-  opacity: 0;
+.mist-layer {
+  position: absolute;
 
-  transition: opacity 0.2s ease;
+  left: -20%;
+  right: -20%;
+  bottom: 17%;
+
+  height: 30%;
+
+  z-index: 2;
 
   pointer-events: none;
+
+  background:
+    radial-gradient(
+      ellipse,
+      rgba(220, 239, 219, 0.15),
+      transparent 67%
+    );
+
+  filter: blur(20px);
+
+  animation: mistMove 18s ease-in-out infinite alternate;
 }
 
-.wildlife:hover .wildlife-name {
-  opacity: 1;
-}
-
-.wildlife-fed::after {
-  content: "♥";
-
-  position: absolute;
-  top: 8px;
-  right: 8px;
-
-  font-size: 15px;
-
-  animation: heart-float 1.3s ease-in-out infinite;
-}
-
-.wildlife-fed {
-  animation: animal-happy 0.45s ease;
-}
-
-.wildlife-fed .wildlife-name {
-  opacity: 1;
-}
-
-.wildlife-fed::before {
-  content: "FED";
-
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 29px);
-
-  transform: translateX(-50%);
-
-  padding: 3px 7px;
-
-  border-radius: 5px;
-
-  background: rgba(38, 135, 67, 0.85);
-
-  font-size: 7px;
-  letter-spacing: 0.12em;
-}
-
-@keyframes heart-float {
-  0%,
-  100% {
-    transform: translateY(0);
+@keyframes mistMove {
+  from {
+    transform: translateX(-4%);
   }
 
-  50% {
-    transform: translateY(-7px);
+  to {
+    transform: translateX(8%);
   }
 }
 
-@keyframes animal-happy {
-  0% {
-    transform: scale(1);
-  }
-
-  40% {
-    transform: scale(1.08) translateY(-5px);
-  }
-
-  100% {
-    transform: scale(1);
-  }
-}
-
-.wildlife--moving {
-  animation: wildlife-breathe 1.4s ease-in-out infinite;
-}
-
-@keyframes wildlife-breathe {
-  0%,
-  100% {
-    margin-bottom: 0;
-  }
-
-  50% {
-    margin-bottom: 2px;
-  }
-}
-
-/* Species-specific scale/color emphasis.
-   These don't DRAW the animals.
-   They make real transparent assets read clearly. */
-
-.wildlife--elephant .wildlife-sprite {
-  filter:
-    drop-shadow(0 8px 5px rgba(0, 0, 0, 0.5))
-    saturate(0.85)
-    contrast(1.08);
-}
-
-.wildlife--tiger .wildlife-sprite {
-  filter:
-    drop-shadow(0 8px 5px rgba(0, 0, 0, 0.5))
-    saturate(1.18)
-    contrast(1.1);
-}
-
-.wildlife--deer .wildlife-sprite {
-  filter:
-    drop-shadow(0 8px 5px rgba(0, 0, 0, 0.45))
-    saturate(1.12)
-    contrast(1.06);
-}
-
-.wildlife--langur .wildlife-sprite {
-  filter:
-    drop-shadow(0 8px 5px rgba(0, 0, 0, 0.5))
-    saturate(0.92)
-    contrast(1.1);
-}
-
-/* =========================================================
-   BIRDS
-   ========================================================= */
-
-.bird {
-  position: absolute;
-  z-index: 14;
-
-  color: rgba(5, 15, 11, 0.9);
-
-  font-size: 20px;
-
-  animation:
-    bird-flight 13s linear infinite;
-}
-
-.bird-1 {
-  top: 19%;
-  left: 15%;
-}
-
-.bird-2 {
-  top: 24%;
-  left: 45%;
-  animation-delay: -4s;
-}
-
-.bird-3 {
-  top: 16%;
-  left: 73%;
-  animation-delay: -8s;
-}
-
-@keyframes bird-flight {
-  0% {
-    transform: translateX(-100px);
-  }
-
-  50% {
-    transform: translateX(280px) translateY(-25px);
-  }
-
-  100% {
-    transform: translateX(700px);
-  }
-}
-
-/* =========================================================
+/* ============================================================
    FIREFLIES
-   ========================================================= */
+   ============================================================ */
+
+.firefly-layer {
+  position: absolute;
+  inset: 0;
+
+  z-index: 4;
+
+  pointer-events: none;
+}
 
 .firefly {
   position: absolute;
-  z-index: 22;
+
+  left: var(--x);
+  top: var(--y);
 
   width: 4px;
   height: 4px;
 
   border-radius: 50%;
 
-  background: #dfff87;
+  background: #eaffbd;
 
   box-shadow:
-    0 0 6px 2px rgba(205, 255, 105, 0.8),
-    0 0 16px 5px rgba(167, 255, 83, 0.25);
+    0 0 5px #d9ff9c,
+    0 0 16px rgba(190, 255, 119, 0.9);
 
-  opacity: 0;
-
-  animation: firefly-float 3.5s ease-in-out infinite;
+  animation:
+    fireflyFloat var(--duration) ease-in-out var(--delay)
+      infinite alternate;
 }
 
-.forest-phase-night .firefly {
-  opacity: 0.95;
-}
-
-@keyframes firefly-float {
-  0%,
-  100% {
-    transform: translate(0, 0);
-    opacity: 0.2;
+@keyframes fireflyFloat {
+  0% {
+    opacity: 0.05;
+    transform: translate(0, 10px) scale(0.7);
   }
 
-  35% {
-    transform: translate(12px, -18px);
+  45% {
     opacity: 1;
   }
 
-  65% {
-    transform: translate(-10px, -30px);
-    opacity: 0.45;
+  100% {
+    opacity: 0.15;
+    transform: translate(
+      25px,
+      -35px
+    ) scale(1.3);
   }
 }
 
-/* =========================================================
-   WEATHER
-   ========================================================= */
+/* ============================================================
+   BIRDS
+   ============================================================ */
 
-.rain-drop {
+.bird-layer {
   position: absolute;
-  z-index: 35;
+  inset: 0;
 
-  top: -30px;
+  z-index: 2;
+
+  pointer-events: none;
+
+  overflow: hidden;
+}
+
+.flying-bird {
+  position: absolute;
+
+  left: -8%;
+
+  top: var(--bird-y);
+
+  font-size: 17px;
+
+  filter: grayscale(1) brightness(0.15);
+
+  animation:
+    birdFlight var(--bird-speed)
+    linear var(--bird-delay)
+    infinite;
+}
+
+@keyframes birdFlight {
+  from {
+    left: -10%;
+    transform: translateY(0) scale(0.7);
+  }
+
+  50% {
+    transform: translateY(-35px) scale(1);
+  }
+
+  to {
+    left: 110%;
+    transform: translateY(15px) scale(0.7);
+  }
+}
+
+/* ============================================================
+   ANIMALS
+   ============================================================ */
+
+.animals {
+  position: absolute;
+  inset: 0;
+
+  z-index: 7;
+
+  pointer-events: none;
+}
+
+.forest-animal {
+  position: absolute;
+
+  border: 0;
+  background: transparent;
+
+  padding: 0;
+
+  pointer-events: auto;
+
+  cursor: pointer;
+
+  transform:
+    translate(-50%, -50%)
+    translateY(0);
+
+  animation:
+    animalIdle
+    var(--animal-speed)
+    ease-in-out
+    var(--animal-delay)
+    infinite;
+
+  transition:
+    transform 0.25s ease,
+    filter 0.25s ease;
+}
+
+.forest-animal:hover {
+  z-index: 10;
+
+  transform:
+    translate(-50%, -50%)
+    translateY(-10px)
+    scale(1.08);
+
+  filter:
+    drop-shadow(0 0 20px rgba(207, 255, 182, 0.22));
+}
+
+.animal-body {
+  display: block;
+
+  font-size: var(--animal-size);
+  line-height: 1;
+
+  filter:
+    drop-shadow(0 18px 13px rgba(0, 0, 0, 0.75))
+    drop-shadow(0 0 4px rgba(255, 255, 255, 0.08));
+
+  animation:
+    animalBreath 3s ease-in-out infinite;
+}
+
+.animal-shadow {
+  position: absolute;
+
+  width: 90%;
+  height: 17px;
+
+  left: 50%;
+  bottom: -4px;
+
+  transform: translateX(-50%);
+
+  background: rgba(0, 0, 0, 0.65);
+
+  filter: blur(8px);
+
+  border-radius: 50%;
+}
+
+.animal-name {
+  position: absolute;
+
+  left: 50%;
+  top: -27px;
+
+  transform: translateX(-50%);
+
+  padding: 4px 8px;
+
+  border-radius: 6px;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  letter-spacing: 1px;
+
+  color: rgba(255, 255, 255, 0.75);
+
+  background: rgba(0, 0, 0, 0.35);
+
+  backdrop-filter: blur(8px);
+
+  opacity: 0;
+
+  transition: opacity 0.2s;
+}
+
+.forest-animal:hover .animal-name {
+  opacity: 1;
+}
+
+@keyframes animalIdle {
+  0%,
+  100% {
+    transform:
+      translate(-50%, -50%)
+      translateY(0);
+  }
+
+  50% {
+    transform:
+      translate(-50%, -50%)
+      translateY(-4px);
+  }
+}
+
+@keyframes animalBreath {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  50% {
+    transform: scaleY(1.015);
+  }
+}
+
+/* ============================================================
+   RAIN
+   ============================================================ */
+
+.rain {
+  position: absolute;
+  inset: 0;
+
+  z-index: 20;
+
+  pointer-events: none;
+
+  overflow: hidden;
+}
+
+.rain i {
+  position: absolute;
+
+  top: -20px;
 
   width: 1px;
-  height: 26px;
+  height: 22px;
 
   background:
     linear-gradient(
       180deg,
       transparent,
-      rgba(190, 225, 255, 0.75)
+      rgba(190, 225, 255, 0.55)
     );
 
-  animation: rainfall 0.65s linear infinite;
+  transform: rotate(15deg);
+
+  animation:
+    rainFall
+    0.7s
+    linear
+    infinite;
 }
 
-@keyframes rainfall {
+@keyframes rainFall {
   to {
-    transform: translateY(110vh) translateX(-40px);
+    transform:
+      translate3d(-100px, 110vh, 0)
+      rotate(15deg);
   }
 }
 
-.mist-layer {
-  position: absolute;
-  z-index: 25;
-
-  left: -10%;
-  width: 120%;
-  height: 26%;
-
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      ellipse,
-      rgba(220, 235, 226, 0.15),
-      transparent 68%
-    );
-
-  filter: blur(10px);
-
-  animation: mist-drift 14s ease-in-out infinite alternate;
-}
-
-.mist-one {
-  bottom: 25%;
-}
-
-.mist-two {
-  bottom: 37%;
-  animation-delay: -7s;
-}
-
-@keyframes mist-drift {
-  from {
-    transform: translateX(-3%);
-  }
-
-  to {
-    transform: translateX(4%);
-  }
-}
-
-/* =========================================================
+/* ============================================================
    HUD
-   ========================================================= */
+   ============================================================ */
 
 .forest-hud {
   position: absolute;
-  z-index: 35;
+
+  top: 0;
+  left: 0;
+  right: 0;
+
+  z-index: 50;
+
+  height: 92px;
+
+  padding:
+    22px
+    clamp(20px, 4vw, 65px);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.55),
+      transparent
+    );
+
+  backdrop-filter: blur(4px);
+}
+
+.hud-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+
+  border-radius: 50%;
+
+  background: #b9e76d;
+
+  box-shadow:
+    0 0 0 5px rgba(185, 231, 109, 0.08),
+    0 0 20px rgba(185, 231, 109, 0.8);
+
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(1.25);
+    opacity: 0.65;
+  }
+}
+
+.hud-brand strong {
+  display: block;
+
+  font-size: 15px;
+  letter-spacing: 3px;
+}
+
+.hud-brand small {
+  display: block;
+
+  margin-top: 2px;
+
+  font-size: 8px;
+  letter-spacing: 2px;
+
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.hud-status {
+  position: absolute;
 
   left: 50%;
-  bottom: 20px;
 
   transform: translateX(-50%);
 
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 9px;
 
-  padding: 8px 10px;
+  font-size: 12px;
 
-  border:
-    1px solid rgba(255, 255, 255, 0.12);
-
-  border-radius: 15px;
-
-  background: rgba(4, 14, 11, 0.55);
-
-  backdrop-filter: blur(15px);
+  color: rgba(255, 255, 255, 0.8);
 }
 
-.hud-zone {
-  min-width: 145px;
-
-  text-align: center;
-
-  font-size: 10px;
-  letter-spacing: 0.08em;
-
-  color: rgba(255, 255, 255, 0.72);
+.hud-status small {
+  opacity: 0.45;
 }
 
-.hud-controls {
+.hud-actions {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 7px;
 }
 
-.hud-controls button {
-  width: 40px;
-  height: 35px;
+.hud-button,
+.hud-back {
+  border: 1px solid rgba(255, 255, 255, 0.13);
 
-  border: 0;
-  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.28);
 
   color: white;
-  background: rgba(255, 255, 255, 0.1);
+
+  backdrop-filter: blur(14px);
 
   cursor: pointer;
 
-  font-size: 18px;
-
   transition:
-    transform 0.15s ease,
-    background 0.15s ease;
+    background 0.2s,
+    transform 0.2s,
+    border-color 0.2s;
 }
 
-.hud-controls button:hover {
+.hud-button {
+  width: 38px;
+  height: 38px;
+
+  border-radius: 10px;
+
+  font-size: 15px;
+}
+
+.hud-button:hover,
+.hud-back:hover {
+  background: rgba(150, 200, 130, 0.17);
+
+  border-color: rgba(190, 230, 160, 0.3);
+
   transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.17);
 }
 
-/* =========================================================
-   INFO MODAL
-   ========================================================= */
+.hud-button.active {
+  background: rgba(130, 190, 110, 0.2);
 
-.forest-modal-backdrop {
+  border-color: rgba(190, 235, 150, 0.35);
+}
+
+.hud-back {
+  padding: 10px 14px;
+
+  border-radius: 10px;
+
+  font-size: 11px;
+
+  letter-spacing: 1px;
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+
+.forest-title {
   position: absolute;
-  z-index: 100;
 
-  inset: 0;
+  left: 50%;
+  top: 46%;
+
+  z-index: 15;
+
+  width: min(700px, 90%);
+
+  transform:
+    translate(-50%, -50%)
+    translate3d(
+      calc(var(--mx) * 0.08),
+      calc(var(--my) * 0.08),
+      0
+    );
+
+  text-align: center;
+
+  pointer-events: none;
+}
+
+.eyebrow {
+  display: block;
+
+  margin-bottom: 17px;
+
+  font-size: 9px;
+
+  letter-spacing: 5px;
+
+  color: rgba(235, 255, 221, 0.64);
+}
+
+.forest-title h1 {
+  margin: 0;
+
+  font-size: clamp(58px, 9vw, 125px);
+
+  line-height: 0.88;
+
+  letter-spacing: -6px;
+
+  font-weight: 300;
+
+  text-shadow:
+    0 5px 40px rgba(0, 0, 0, 0.6),
+    0 0 70px rgba(174, 222, 155, 0.1);
+}
+
+.forest-title h1 span {
+  display: block;
+
+  font-weight: 700;
+
+  background:
+    linear-gradient(
+      180deg,
+      #efffe5,
+      #acd28e
+    );
+
+  -webkit-background-clip: text;
+  background-clip: text;
+
+  color: transparent;
+}
+
+.forest-title p {
+  margin: 27px 0 0;
+
+  font-size: 14px;
+
+  letter-spacing: 1px;
+
+  color: rgba(255, 255, 255, 0.63);
+}
+
+.explore-hint {
+  margin-top: 31px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 9px 14px;
+
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  border-radius: 100px;
+
+  background: rgba(0, 0, 0, 0.2);
+
+  backdrop-filter: blur(10px);
+
+  font-size: 9px;
+
+  letter-spacing: 1px;
+
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.mouse-icon {
+  font-size: 17px;
+}
+
+/* ============================================================
+   BOTTOM HUD
+   ============================================================ */
+
+.bottom-hud {
+  position: absolute;
+
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  z-index: 50;
+
+  padding:
+    30px
+    clamp(20px, 4vw, 65px);
 
   display: flex;
-  align-items: center;
-  justify-content: center;
 
-  padding: 20px;
+  align-items: flex-end;
 
-  background: rgba(0, 0, 0, 0.52);
+  justify-content: space-between;
 
-  backdrop-filter: blur(8px);
+  pointer-events: none;
 }
 
-.forest-info-panel {
-  position: relative;
+.eco-card,
+.sound-card,
+.species-card {
+  display: flex;
 
-  width: min(530px, 100%);
-  max-height: 80vh;
+  align-items: center;
 
-  overflow-y: auto;
+  gap: 11px;
 
-  padding: 30px;
+  padding: 11px 14px;
 
   border:
-    1px solid rgba(255, 255, 255, 0.15);
+    1px solid
+    rgba(255, 255, 255, 0.1);
 
-  border-radius: 24px;
+  border-radius: 12px;
+
+  background: rgba(0, 0, 0, 0.24);
+
+  backdrop-filter: blur(14px);
+}
+
+.eco-icon {
+  font-size: 21px;
+}
+
+.eco-card small,
+.sound-card small,
+.species-card small {
+  display: block;
+
+  font-size: 7px;
+
+  letter-spacing: 2px;
+
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.eco-card strong,
+.sound-card strong,
+.species-card strong {
+  display: block;
+
+  margin-top: 3px;
+
+  font-size: 10px;
+
+  letter-spacing: 1px;
+}
+
+.species-card {
+  position: absolute;
+
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  display: block;
+
+  text-align: center;
+}
+
+.sound-card {
+  margin-left: auto;
+}
+
+.sound-bars {
+  height: 20px;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 2px;
+}
+
+.sound-bars i {
+  width: 2px;
+  height: 7px;
+
+  background: rgba(190, 225, 160, 0.45);
+
+  border-radius: 10px;
+}
+
+.sound-bars.playing i {
+  animation: soundBar 0.8s ease-in-out infinite alternate;
+}
+
+.sound-bars.playing i:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.sound-bars.playing i:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.sound-bars.playing i:nth-child(3) {
+  animation-delay: 0s;
+}
+
+.sound-bars.playing i:nth-child(4) {
+  animation-delay: 0.2s;
+}
+
+.sound-bars.playing i:nth-child(5) {
+  animation-delay: 0.4s;
+}
+
+@keyframes soundBar {
+  to {
+    height: 19px;
+  }
+}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+
+.animal-modal-backdrop {
+  position: absolute;
+  inset: 0;
+
+  z-index: 100;
+
+  display: grid;
+
+  place-items: center;
+
+  background: rgba(0, 8, 5, 0.48);
+
+  backdrop-filter: blur(12px);
+
+  animation: modalFade 0.25s ease;
+}
+
+.animal-modal {
+  position: relative;
+
+  width: min(390px, 88%);
+
+  padding: 40px 35px 35px;
+
+  border:
+    1px solid
+    rgba(220, 255, 200, 0.14);
+
+  border-radius: 22px;
 
   background:
     linear-gradient(
       145deg,
-      rgba(18, 39, 29, 0.97),
-      rgba(5, 19, 13, 0.97)
+      rgba(30, 55, 37, 0.88),
+      rgba(5, 17, 11, 0.94)
     );
 
   box-shadow:
-    0 30px 100px rgba(0, 0, 0, 0.65);
+    0 40px 100px rgba(0, 0, 0, 0.65),
+    inset 0 1px rgba(255, 255, 255, 0.05);
+
+  text-align: center;
 }
 
 .modal-close {
   position: absolute;
 
-  top: 15px;
-  right: 15px;
+  top: 14px;
+  right: 14px;
 
-  width: 35px;
-  height: 35px;
+  width: 31px;
+  height: 31px;
 
   border: 0;
-  border-radius: 10px;
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.07);
 
   color: white;
-  background: rgba(255, 255, 255, 0.08);
+
+  font-size: 19px;
 
   cursor: pointer;
-
-  font-size: 20px;
 }
 
-.info-kicker {
-  margin-bottom: 7px;
-
-  font-size: 9px;
-  letter-spacing: 0.22em;
-
-  color: rgba(172, 230, 158, 0.72);
-}
-
-.forest-info-panel h2 {
-  margin: 0 45px 8px 0;
-
-  font-size: 30px;
-}
-
-.info-subtitle {
-  margin: 0 0 22px;
-
-  color: rgba(255, 255, 255, 0.56);
-
-  line-height: 1.5;
-}
-
-.animal-fact-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-
+.modal-animal {
   margin-bottom: 20px;
-}
 
-.animal-fact-grid > div {
-  padding: 13px;
+  font-size: 75px;
 
-  border-radius: 13px;
-
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.animal-fact-grid small {
-  display: block;
-
-  margin-bottom: 5px;
-
-  font-size: 8px;
-  letter-spacing: 0.16em;
-
-  opacity: 0.42;
-}
-
-.animal-fact-grid strong {
-  display: block;
-
-  font-size: 11px;
-  line-height: 1.45;
-
-  font-weight: 500;
-}
-
-.fact-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-
-  padding-left: 19px;
-
-  color: rgba(255, 255, 255, 0.72);
-
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.animal-actions {
-  display: flex;
-  gap: 9px;
-
-  margin-top: 23px;
-}
-
-.animal-actions button {
-  flex: 1;
-
-  padding: 12px;
-
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 11px;
-
-  color: white;
-
-  background: rgba(255, 255, 255, 0.08);
-
-  cursor: pointer;
-
-  transition:
-    background 0.2s ease,
-    transform 0.2s ease;
-}
-
-.animal-actions button:hover {
-  transform: translateY(-2px);
-  background: rgba(90, 170, 92, 0.2);
-}
-
-/* =========================================================
-   FAILURE NOTICE
-   ========================================================= */
-
-.asset-warning {
-  position: absolute;
-  z-index: 80;
-
-  right: 16px;
-  bottom: 16px;
-
-  max-width: 300px;
-
-  padding: 9px 12px;
-
-  border:
-    1px solid rgba(255, 255, 255, 0.1);
-
-  border-radius: 10px;
-
-  background: rgba(0, 0, 0, 0.55);
-
-  color: rgba(255, 255, 255, 0.58);
-
-  font-size: 9px;
-}
-
-/* =========================================================
-   NIGHT EXTRA DARKNESS
-   ========================================================= */
-
-.forest-phase-night .forest-ground {
-  background:
-    linear-gradient(
-      180deg,
-      #101d17,
-      #060c09 48%,
-      #020504
+  filter:
+    drop-shadow(
+      0 20px 15px rgba(0, 0, 0, 0.55)
     );
 }
 
-.forest-phase-night .tree-crown i {
-  filter: brightness(0.48);
+.animal-modal > span {
+  font-size: 8px;
+
+  letter-spacing: 3px;
+
+  color: #afd491;
 }
 
-.forest-phase-night .tree-trunk {
-  filter: brightness(0.45);
+.animal-modal h2 {
+  margin: 8px 0;
+
+  font-size: 35px;
+
+  font-weight: 400;
 }
 
-.forest-phase-night .river {
-  filter: brightness(0.48);
+.animal-modal p {
+  margin: 15px 0 25px;
+
+  font-size: 12px;
+
+  line-height: 1.7;
+
+  color: rgba(255, 255, 255, 0.57);
 }
 
-.forest-phase-night .forest-object {
-  filter: brightness(0.65);
-}
+.modal-button {
+  padding: 11px 17px;
 
-/* =========================================================
-   OBJECTS
-   ========================================================= */
+  border: 1px solid rgba(210, 244, 180, 0.2);
 
-.forest-object {
-  position: absolute;
-  bottom: 27%;
-  z-index: 16;
+  border-radius: 9px;
 
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
+  background: rgba(170, 215, 130, 0.1);
 
-  padding: 0;
-
-  border: 0;
-  background: transparent;
+  color: white;
 
   cursor: pointer;
 
-  transition:
-    transform 0.2s ease,
-    filter 0.2s ease;
+  font-size: 10px;
+
+  letter-spacing: 1px;
 }
 
-.forest-object span {
-  font-size: 45px;
+@keyframes modalFade {
+  from {
+    opacity: 0;
+  }
 
-  filter:
-    drop-shadow(0 8px 5px rgba(0, 0, 0, 0.5));
+  to {
+    opacity: 1;
+  }
 }
 
-.forest-object small {
-  padding: 4px 7px;
+/* ============================================================
+   VIGNETTE
+   ============================================================ */
 
-  border-radius: 5px;
+.vignette {
+  position: absolute;
+  inset: 0;
 
-  color: white;
-  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
 
-  font-size: 8px;
+  pointer-events: none;
+
+  background:
+    radial-gradient(
+      ellipse at center,
+      transparent 35%,
+      rgba(0, 0, 0, 0.13) 67%,
+      rgba(0, 0, 0, 0.67) 100%
+    );
+}
+
+.night .vignette {
+  background:
+    radial-gradient(
+      ellipse at center,
+      transparent 28%,
+      rgba(0, 0, 0, 0.3) 65%,
+      rgba(0, 0, 0, 0.82) 100%
+    );
+}
+
+/* ============================================================
+   HIDE OPTIONAL ONLINE MEDIA
+   ============================================================ */
+
+.hidden-online-asset {
+  position: absolute;
+
+  width: 1px;
+  height: 1px;
 
   opacity: 0;
 
-  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
-.forest-object:hover {
-  transform: translateY(-5px) scale(1.04);
-}
-
-.forest-object:hover small {
-  opacity: 1;
-}
-
-/* =========================================================
+/* ============================================================
    MOBILE
-   ========================================================= */
+   ============================================================ */
 
 @media (max-width: 700px) {
-  .forest-topbar {
-    left: 10px;
-    right: 10px;
-    top: 10px;
+  .forest-hud {
+    height: 75px;
+
+    padding:
+      15px
+      16px;
   }
 
-  .forest-status {
+  .hud-brand strong {
+    font-size: 11px;
+  }
+
+  .hud-brand small {
+    font-size: 6px;
+  }
+
+  .hud-status {
     display: none;
   }
 
-  .forest-sidebar {
-    left: 10px;
-    top: 78px;
-    width: min(280px, calc(100vw - 20px));
+  .hud-actions {
+    gap: 4px;
   }
 
-  .forest-info-panel {
-    padding: 23px;
+  .hud-button {
+    width: 33px;
+    height: 33px;
+
+    font-size: 12px;
   }
 
-  .forest-info-panel h2 {
-    font-size: 24px;
+  .hud-back {
+    display: none;
   }
 
-  .animal-fact-grid {
-    grid-template-columns: 1fr;
+  .forest-title {
+    top: 45%;
   }
 
-  .animal-actions {
-    flex-direction: column;
+  .forest-title h1 {
+    font-size: clamp(52px, 18vw, 90px);
+
+    letter-spacing: -4px;
   }
 
-  .forest-hud {
-    bottom: 10px;
+  .forest-title p {
+    font-size: 11px;
   }
 
-  .hud-zone {
-    min-width: 105px;
+  .eyebrow {
+    font-size: 7px;
+
+    letter-spacing: 3px;
+  }
+
+  .explore-hint {
+    font-size: 8px;
+  }
+
+  .bottom-hud {
+    padding: 15px;
+  }
+
+  .species-card {
+    display: none;
+  }
+
+  .eco-card,
+  .sound-card {
+    padding: 8px 10px;
+  }
+
+  .giant-tree {
+    width: 130px;
+    height: 520px;
+  }
+
+  .forest-path {
+    width: 55%;
+  }
+
+  .animal-wolf {
+    display: none;
+  }
+
+  .animal-deer {
+    left: 20% !important;
+  }
+
+  .animal-fox {
+    left: 75% !important;
   }
 }
 
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
+/* ============================================================
+   REDUCE MOTION
+   ============================================================ */
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.001ms !important;
+    animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
-    transition-duration: 0.001ms !important;
   }
 }
