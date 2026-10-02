@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 # ============================================================
 # GREEN PULSE — BACKEND
+# Supabase-connected version
 # ============================================================
 
 app = FastAPI(title="GreenPulse API")
@@ -59,13 +60,12 @@ SQLITE_DB = os.path.join(
 
 class PostgresConnection:
     """
-    Small compatibility wrapper.
+    Compatibility wrapper.
 
-    Existing GreenPulse code uses SQLite-style ? placeholders.
-    PostgreSQL uses %s placeholders.
+    Existing GreenPulse backend code uses ? placeholders.
+    PostgreSQL uses %s.
 
-    This wrapper converts ? into %s automatically so the same
-    backend logic can work with both databases.
+    This wrapper converts ? -> %s.
     """
 
     def __init__(self, connection):
@@ -99,7 +99,7 @@ def get_db():
     """
     Supabase PostgreSQL is PRIMARY whenever DATABASE_URL exists.
 
-    SQLite remains the local fallback/reserve database.
+    SQLite remains the local fallback.
     """
 
     if DATABASE_URL:
@@ -108,9 +108,7 @@ def get_db():
             row_factory=dict_row,
         )
 
-        return PostgresConnection(
-            connection
-        )
+        return PostgresConnection(connection)
 
     connection = sqlite3.connect(
         SQLITE_DB,
@@ -200,14 +198,6 @@ SEASONS = [
 
 
 def get_current_season(current_date=None):
-    """
-    Returns the current Indian seasonal environment.
-
-    Seasons are broad environmental phases rather than strict
-    meteorological classifications.
-
-    Real weather controls the actual daily atmosphere.
-    """
 
     if current_date is None:
         current_date = india_now().date()
@@ -222,13 +212,6 @@ def get_current_season(current_date=None):
 
 
 def get_season_progress(current_date=None):
-    """
-    Returns approximate progress through the current season.
-
-    This is visual metadata for the Forest.
-
-    It does not affect points, badges or user progression.
-    """
 
     if current_date is None:
         current_date = india_now().date()
@@ -237,82 +220,34 @@ def get_season_progress(current_date=None):
     month = current_date.month
 
     if month == 1:
-        start = datetime(
-            year,
-            1,
-            1,
-        ).date()
 
-        end = datetime(
-            year,
-            1,
-            31,
-        ).date()
+        start = datetime(year, 1, 1).date()
+        end = datetime(year, 1, 31).date()
 
     elif month in (2, 3):
-        start = datetime(
-            year,
-            2,
-            1,
-        ).date()
 
-        end = datetime(
-            year,
-            3,
-            31,
-        ).date()
+        start = datetime(year, 2, 1).date()
+        end = datetime(year, 3, 31).date()
 
     elif month in (4, 5, 6):
-        start = datetime(
-            year,
-            4,
-            1,
-        ).date()
 
-        end = datetime(
-            year,
-            6,
-            30,
-        ).date()
+        start = datetime(year, 4, 1).date()
+        end = datetime(year, 6, 30).date()
 
     elif month in (7, 8, 9):
-        start = datetime(
-            year,
-            7,
-            1,
-        ).date()
 
-        end = datetime(
-            year,
-            9,
-            30,
-        ).date()
+        start = datetime(year, 7, 1).date()
+        end = datetime(year, 9, 30).date()
 
     elif month in (10, 11):
-        start = datetime(
-            year,
-            10,
-            1,
-        ).date()
 
-        end = datetime(
-            year,
-            11,
-            30,
-        ).date()
+        start = datetime(year, 10, 1).date()
+        end = datetime(year, 11, 30).date()
 
     else:
-        start = datetime(
-            year,
-            12,
-            1,
-        ).date()
 
-        end = datetime(
-            year + 1,
-            1,
-            31,
-        ).date()
+        start = datetime(year, 12, 1).date()
+        end = datetime(year + 1, 1, 31).date()
 
     total_days = max(
         1,
@@ -341,6 +276,7 @@ def get_season_progress(current_date=None):
 # ============================================================
 
 def hash_password(password: str) -> str:
+
     salt = secrets.token_bytes(16)
 
     derived = hashlib.scrypt(
@@ -365,6 +301,7 @@ def verify_password(
 ) -> bool:
 
     try:
+
         algorithm, salt_hex, hash_hex = (
             stored_hash.split("$")
         )
@@ -372,9 +309,7 @@ def verify_password(
         if algorithm != "scrypt":
             return False
 
-        salt = bytes.fromhex(
-            salt_hex
-        )
+        salt = bytes.fromhex(salt_hex)
 
         derived = hashlib.scrypt(
             password.encode("utf-8"),
@@ -403,11 +338,11 @@ def init_db():
 
     try:
 
-        if DATABASE_URL:
+        # ====================================================
+        # EXISTING TABLES
+        # ====================================================
 
-            # ------------------------------------------------
-            # POSTGRESQL / SUPABASE
-            # ------------------------------------------------
+        if DATABASE_URL:
 
             db.execute(
                 """
@@ -457,6 +392,7 @@ def init_db():
                     user_id BIGINT NOT NULL REFERENCES users(id),
                     challenge_id TEXT NOT NULL,
                     challenge_date TEXT NOT NULL,
+                    category TEXT NOT NULL DEFAULT 'General',
                     completed_at TEXT NOT NULL,
                     points INTEGER NOT NULL,
                     UNIQUE(user_id, challenge_date)
@@ -466,10 +402,6 @@ def init_db():
 
         else:
 
-            # ------------------------------------------------
-            # SQLITE FALLBACK
-            # ------------------------------------------------
-
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS users (
@@ -518,6 +450,7 @@ def init_db():
                     user_id INTEGER NOT NULL,
                     challenge_id TEXT NOT NULL,
                     challenge_date TEXT NOT NULL,
+                    category TEXT NOT NULL DEFAULT 'General',
                     completed_at TEXT NOT NULL,
                     points INTEGER NOT NULL,
                     UNIQUE(user_id, challenge_date)
@@ -525,13 +458,316 @@ def init_db():
                 """
             )
 
+        # ====================================================
+        # SAFE MIGRATION — USERS
+        # ====================================================
+
+        if DATABASE_URL:
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS account_status
+                TEXT NOT NULL DEFAULT 'active'
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS completed_days
+                INTEGER NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS total_calculations
+                INTEGER NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS total_co2e
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS total_saved_co2e
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS electricity_total
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS lpg_total
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS water_total
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS transport_total
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS food_total
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+            db.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS waste_total
+                DOUBLE PRECISION NOT NULL DEFAULT 0
+                """
+            )
+
+        else:
+
+            # SQLite compatibility migration.
+            existing_columns = db.execute(
+                "PRAGMA table_info(users)"
+            ).fetchall()
+
+            column_names = {
+                row["name"]
+                for row in existing_columns
+            }
+
+            sqlite_user_columns = {
+                "account_status": (
+                    "TEXT NOT NULL DEFAULT 'active'"
+                ),
+                "completed_days": (
+                    "INTEGER NOT NULL DEFAULT 0"
+                ),
+                "total_calculations": (
+                    "INTEGER NOT NULL DEFAULT 0"
+                ),
+                "total_co2e": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+                "total_saved_co2e": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+                "electricity_total": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+                "lpg_total": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+                "water_total": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+                "transport_total": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+                "food_total": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+                "waste_total": (
+                    "REAL NOT NULL DEFAULT 0"
+                ),
+            }
+
+            for column, definition in sqlite_user_columns.items():
+
+                if column not in column_names:
+
+                    db.execute(
+                        f"""
+                        ALTER TABLE users
+                        ADD COLUMN {column}
+                        {definition}
+                        """
+                    )
+
+        # ====================================================
+        # DAILY CALCULATIONS
+        # ====================================================
+
+        if DATABASE_URL:
+
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS daily_calculations (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+
+                    user_id BIGINT NOT NULL
+                        REFERENCES users(id)
+                        ON DELETE CASCADE,
+
+                    calculation_date TEXT NOT NULL,
+
+                    electricity DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    lpg DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    water DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    travel DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+                    transport_mode TEXT NOT NULL DEFAULT 'Car',
+
+                    meals DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+                    diet TEXT NOT NULL DEFAULT 'Mixed',
+
+                    waste DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+                    electricity_co2e DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    lpg_co2e DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    transport_co2e DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    food_co2e DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    waste_co2e DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+                    total_co2e DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+                    points INTEGER NOT NULL DEFAULT 25,
+
+                    created_at TEXT NOT NULL,
+
+                    UNIQUE(user_id, calculation_date)
+                )
+                """
+            )
+
+        else:
+
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS daily_calculations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                    user_id INTEGER NOT NULL,
+
+                    calculation_date TEXT NOT NULL,
+
+                    electricity REAL NOT NULL DEFAULT 0,
+                    lpg REAL NOT NULL DEFAULT 0,
+                    water REAL NOT NULL DEFAULT 0,
+                    travel REAL NOT NULL DEFAULT 0,
+
+                    transport_mode TEXT NOT NULL DEFAULT 'Car',
+
+                    meals REAL NOT NULL DEFAULT 0,
+
+                    diet TEXT NOT NULL DEFAULT 'Mixed',
+
+                    waste REAL NOT NULL DEFAULT 0,
+
+                    electricity_co2e REAL NOT NULL DEFAULT 0,
+                    lpg_co2e REAL NOT NULL DEFAULT 0,
+                    transport_co2e REAL NOT NULL DEFAULT 0,
+                    food_co2e REAL NOT NULL DEFAULT 0,
+                    waste_co2e REAL NOT NULL DEFAULT 0,
+
+                    total_co2e REAL NOT NULL DEFAULT 0,
+
+                    points INTEGER NOT NULL DEFAULT 25,
+
+                    created_at TEXT NOT NULL,
+
+                    UNIQUE(user_id, calculation_date)
+                )
+                """
+            )
+
+        # ====================================================
+        # INDEXES
+        # ====================================================
+
+        db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_sessions_user_id
+            ON sessions(user_id)
+            """
+        )
+
+        db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_challenges_user_id
+            ON challenge_completions(user_id)
+            """
+        )
+
+        db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_daily_calculations_user_id
+            ON daily_calculations(user_id)
+            """
+        )
+
+        db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_daily_calculations_date
+            ON daily_calculations(calculation_date)
+            """
+        )
+
+        # ====================================================
+        # EXISTING USERS
+        # Give migrated accounts an explicit active status.
+        # This does NOT change passwords or roles.
+        # ====================================================
+
+        db.execute(
+            """
+            UPDATE users
+            SET account_status = 'active'
+            WHERE account_status IS NULL
+               OR account_status = ''
+            """
+        )
+
         db.commit()
 
-    except Exception:
+        print("DATABASE MIGRATION: OK")
+
+    except Exception as error:
+
         db.rollback()
+
+        print(
+            "DATABASE INITIALIZATION ERROR:",
+            error,
+        )
+
         raise
 
     finally:
+
         db.close()
 
 
@@ -575,6 +811,31 @@ class LoginRequest(BaseModel):
 class ChallengeCompleteRequest(BaseModel):
     token: str
     challenge_id: str
+
+
+class CalculationRequest(BaseModel):
+    token: str
+
+    calculation_date: str | None = None
+
+    electricity: float = 0
+    lpg: float = 0
+    water: float = 0
+    travel: float = 0
+
+    transport_mode: str = "Car"
+
+    meals: float = 0
+
+    diet: str = "Mixed"
+
+    waste: float = 0
+
+
+class AdminUserStatusRequest(BaseModel):
+    token: str
+    user_id: int
+    status: str
 
 
 # ============================================================
@@ -637,8 +898,8 @@ CHALLENGES = [
         "forest_points": 1,
         "title": "Choose a low-carbon trip",
         "description": (
-            "Replace one short motorised journey with a lower-"
-            "carbon option."
+            "Replace one short motorised journey with a "
+            "lower-carbon option."
         ),
         "action": (
             "Walk, cycle or use shared/public transport for one "
@@ -713,11 +974,6 @@ CHALLENGES = [
 
 def get_today_challenge():
 
-    """
-    Everyone receives the same challenge for the same
-    Indian calendar date.
-    """
-
     today = india_now().date()
 
     seed = int(
@@ -729,7 +985,7 @@ def get_today_challenge():
     return CHALLENGES[index]
 
 
-def get_level_from_points(points: int) -> int:
+def get_level_from_points(points: int):
 
     return max(
         1,
@@ -959,7 +1215,7 @@ FOREST_STAGES = [
 
 
 # ============================================================
-# FOREST PROGRESSION HELPERS
+# FOREST HELPERS
 # ============================================================
 
 def get_completed_challenge_count(
@@ -990,10 +1246,10 @@ def get_category_counts(
 
     rows = db.execute(
         """
-        SELECT challenge_id, COUNT(*) AS count
+        SELECT category, COUNT(*) AS count
         FROM challenge_completions
         WHERE user_id = ?
-        GROUP BY challenge_id
+        GROUP BY category
         """,
         (user_id,),
     ).fetchall()
@@ -1003,22 +1259,15 @@ def get_category_counts(
         for challenge in CHALLENGES
     }
 
-    challenge_map = {
-        challenge["id"]: challenge["category"]
-        for challenge in CHALLENGES
-    }
-
     for row in rows:
 
-        challenge_id = row["challenge_id"]
-        count = int(row["count"])
+        category = row["category"]
 
-        category = challenge_map.get(
-            challenge_id
-        )
+        if category in category_counts:
 
-        if category:
-            category_counts[category] = count
+            category_counts[category] = int(
+                row["count"]
+            )
 
     return category_counts
 
@@ -1033,9 +1282,11 @@ def get_forest_stage(
     for stage in FOREST_STAGES:
 
         if forest_actions >= stage["minimum_actions"]:
+
             current = stage
 
         elif next_stage is None:
+
             next_stage = stage
 
     if next_stage:
@@ -1076,6 +1327,7 @@ def get_forest_stage(
         )
 
     else:
+
         progress = 100
 
     return (
@@ -1279,94 +1531,6 @@ def get_forest_payload(
 
 
 # ============================================================
-# WEATHER
-# ============================================================
-
-def weather_code_to_condition(
-    weather_code: int,
-):
-
-    """
-    Open-Meteo / WMO weather interpretation.
-    """
-
-    if weather_code == 0:
-        return "clear"
-
-    if weather_code in (1, 2):
-        return "partly_cloudy"
-
-    if weather_code == 3:
-        return "cloudy"
-
-    if weather_code in (45, 48):
-        return "fog"
-
-    if weather_code in (
-        51,
-        53,
-        55,
-        56,
-        57,
-    ):
-        return "drizzle"
-
-    if weather_code in (
-        61,
-        63,
-        65,
-        66,
-        67,
-    ):
-        return "rain"
-
-    if weather_code in (
-        71,
-        73,
-        75,
-        77,
-    ):
-        return "snow"
-
-    if weather_code in (
-        80,
-        81,
-        82,
-    ):
-        return "showers"
-
-    if weather_code in (
-        85,
-        86,
-    ):
-        return "snow_showers"
-
-    if weather_code in (
-        95,
-        96,
-        99,
-    ):
-        return "thunderstorm"
-
-    return "cloudy"
-
-
-def get_time_of_day(
-    latitude: float,
-    longitude: float,
-):
-
-    """
-    Reserved for future Forest improvements.
-    """
-
-    return {
-        "latitude": latitude,
-        "longitude": longitude,
-    }
-
-
-# ============================================================
 # AUTH HELPERS
 # ============================================================
 
@@ -1388,7 +1552,18 @@ def get_current_user(
             users.points,
             users.streak,
             users.level,
-            users.forest_actions
+            users.forest_actions,
+            users.account_status,
+            users.completed_days,
+            users.total_calculations,
+            users.total_co2e,
+            users.total_saved_co2e,
+            users.electricity_total,
+            users.lpg_total,
+            users.water_total,
+            users.transport_total,
+            users.food_total,
+            users.waste_total
         FROM sessions
         JOIN users
             ON users.id = sessions.user_id
@@ -1397,6 +1572,59 @@ def get_current_user(
         """,
         (token,),
     ).fetchone()
+
+    if not row:
+        return None
+
+    if row["account_status"] != "active":
+        return None
+
+    return row
+
+
+def get_admin_user(
+    db,
+    token: str,
+):
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required.",
+        )
+
+    row = db.execute(
+        """
+        SELECT *
+        FROM sessions
+        JOIN users
+            ON users.id = sessions.user_id
+        WHERE sessions.token = ?
+        LIMIT 1
+        """,
+        (token,),
+    ).fetchone()
+
+    if not row:
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid session.",
+        )
+
+    if row["account_status"] != "active":
+
+        raise HTTPException(
+            status_code=403,
+            detail="This account is frozen.",
+        )
+
+    if row["role"] != "admin":
+
+        raise HTTPException(
+            status_code=403,
+            detail="Administrator access required.",
+        )
 
     return row
 
@@ -1411,20 +1639,49 @@ def root():
     return {
         "name": "GreenPulse API",
         "status": "online",
-    }
-
-
-@app.get("/api/health")
-def health():
-
-    return {
-        "status": "ok",
         "database": (
             "supabase-postgresql"
             if DATABASE_URL
             else "sqlite-fallback"
         ),
     }
+
+
+@app.get("/api/health")
+def health():
+
+    db = get_db()
+
+    try:
+
+        db.execute(
+            "SELECT 1"
+        ).fetchone()
+
+        return {
+            "status": "healthy",
+            "database": (
+                "supabase-postgresql"
+                if DATABASE_URL
+                else "sqlite-fallback"
+            ),
+        }
+
+    except Exception as error:
+
+        print(
+            "HEALTH DATABASE ERROR:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=503,
+            detail="Database connection unavailable.",
+        )
+
+    finally:
+
+        db.close()
 
 
 @app.get("/api/impact")
@@ -1506,7 +1763,8 @@ def register(
                     points,
                     streak,
                     level,
-                    forest_actions
+                    forest_actions,
+                    account_status
                 )
                 VALUES (
                     ?,
@@ -1516,9 +1774,10 @@ def register(
                     0,
                     0,
                     1,
-                    0
+                    0,
+                    'active'
                 )
-                RETURNING id, username, role
+                RETURNING id, username, role, account_status
                 """,
                 (
                     username,
@@ -1539,7 +1798,8 @@ def register(
                     points,
                     streak,
                     level,
-                    forest_actions
+                    forest_actions,
+                    account_status
                 )
                 VALUES (
                     ?,
@@ -1549,7 +1809,8 @@ def register(
                     0,
                     0,
                     1,
-                    0
+                    0,
+                    'active'
                 )
                 """,
                 (
@@ -1563,6 +1824,7 @@ def register(
                 "id": cursor.lastrowid,
                 "username": username,
                 "role": "user",
+                "account_status": "active",
             }
 
         db.commit()
@@ -1632,6 +1894,11 @@ def login(
                 ),
             )
 
+        # ----------------------------------------------------
+        # EXISTING PASSWORD HASH IS USED DIRECTLY.
+        # NO PASSWORD RESET.
+        # ----------------------------------------------------
+
         if not verify_password(
             request.password,
             row["password_hash"],
@@ -1642,6 +1909,20 @@ def login(
                 detail=(
                     "Invalid username "
                     "or password."
+                ),
+            )
+
+        # ----------------------------------------------------
+        # FROZEN ACCOUNT
+        # ----------------------------------------------------
+
+        if row["account_status"] != "active":
+
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "This GreenPulse account is currently "
+                    "frozen by an administrator."
                 ),
             )
 
@@ -1671,6 +1952,21 @@ def login(
                 "id": row["id"],
                 "username": row["username"],
                 "role": row["role"],
+                "account_status": row[
+                    "account_status"
+                ],
+                "points": int(
+                    row["points"] or 0
+                ),
+                "streak": int(
+                    row["streak"] or 0
+                ),
+                "level": int(
+                    row["level"] or 1
+                ),
+                "forest_actions": int(
+                    row["forest_actions"] or 0
+                ),
             },
         }
 
@@ -1720,7 +2016,7 @@ def me(
 
             raise HTTPException(
                 status_code=401,
-                detail="Invalid or expired session.",
+                detail="Invalid, expired or frozen session.",
             )
 
         return {
@@ -1757,6 +2053,531 @@ def logout(
 
         return {
             "message": "Logged out successfully."
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# CALCULATOR — FACTORS
+# ============================================================
+
+FACTORS = {
+    "electricity": 0.82,
+    "lpg": 2.98,
+    "waste": 0.50,
+
+    "transport": {
+        "Car": 0.192,
+        "Bike": 0.103,
+        "Bus": 0.089,
+        "Train": 0.041,
+        "Walking / Cycling": 0,
+    },
+
+    "meals": {
+        "Vegetarian": 0.80,
+        "Mixed": 1.70,
+        "Non-Vegetarian": 2.50,
+    },
+}
+
+
+def calculate_carbon(
+    request: CalculationRequest,
+):
+
+    electricity = max(
+        0,
+        float(request.electricity),
+    )
+
+    lpg = max(
+        0,
+        float(request.lpg),
+    )
+
+    water = max(
+        0,
+        float(request.water),
+    )
+
+    travel = max(
+        0,
+        float(request.travel),
+    )
+
+    meals = max(
+        0,
+        float(request.meals),
+    )
+
+    waste = max(
+        0,
+        float(request.waste),
+    )
+
+    transport_mode = request.transport_mode
+
+    if transport_mode not in FACTORS["transport"]:
+        transport_mode = "Car"
+
+    diet = request.diet
+
+    if diet not in FACTORS["meals"]:
+        diet = "Mixed"
+
+    electricity_co2e = (
+        electricity
+        * FACTORS["electricity"]
+    )
+
+    lpg_co2e = (
+        lpg
+        * FACTORS["lpg"]
+    )
+
+    transport_co2e = (
+        travel
+        * FACTORS["transport"][
+            transport_mode
+        ]
+    )
+
+    food_co2e = (
+        meals
+        * FACTORS["meals"][diet]
+    )
+
+    waste_co2e = (
+        waste
+        * FACTORS["waste"]
+    )
+
+    total = (
+        electricity_co2e
+        + lpg_co2e
+        + transport_co2e
+        + food_co2e
+        + waste_co2e
+    )
+
+    return {
+        "electricity_co2e": round(
+            electricity_co2e,
+            3,
+        ),
+        "lpg_co2e": round(
+            lpg_co2e,
+            3,
+        ),
+        "transport_co2e": round(
+            transport_co2e,
+            3,
+        ),
+        "food_co2e": round(
+            food_co2e,
+            3,
+        ),
+        "waste_co2e": round(
+            waste_co2e,
+            3,
+        ),
+        "total_co2e": round(
+            total,
+            3,
+        ),
+    }
+
+
+# ============================================================
+# CALCULATOR — SAVE
+# ============================================================
+
+@app.post("/api/calculations")
+@app.post("/api/calculator/save")
+def save_calculation(
+    request: CalculationRequest,
+):
+
+    db = get_db()
+
+    try:
+
+        user = get_current_user(
+            db,
+            request.token,
+        )
+
+        if not user:
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        calculation_date = (
+            request.calculation_date
+            or india_today()
+        )
+
+        result = calculate_carbon(
+            request
+        )
+
+        existing = db.execute(
+            """
+            SELECT *
+            FROM daily_calculations
+            WHERE user_id = ?
+            AND calculation_date = ?
+            LIMIT 1
+            """,
+            (
+                user["id"],
+                calculation_date,
+            ),
+        ).fetchone()
+
+        if existing:
+
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "A carbon calculation for this "
+                    "date has already been saved."
+                ),
+            )
+
+        points = 25
+
+        db.execute(
+            """
+            INSERT INTO daily_calculations (
+                user_id,
+                calculation_date,
+                electricity,
+                lpg,
+                water,
+                travel,
+                transport_mode,
+                meals,
+                diet,
+                waste,
+                electricity_co2e,
+                lpg_co2e,
+                transport_co2e,
+                food_co2e,
+                waste_co2e,
+                total_co2e,
+                points,
+                created_at
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                user["id"],
+                calculation_date,
+                max(0, float(request.electricity)),
+                max(0, float(request.lpg)),
+                max(0, float(request.water)),
+                max(0, float(request.travel)),
+                request.transport_mode,
+                max(0, float(request.meals)),
+                request.diet,
+                max(0, float(request.waste)),
+                result["electricity_co2e"],
+                result["lpg_co2e"],
+                result["transport_co2e"],
+                result["food_co2e"],
+                result["waste_co2e"],
+                result["total_co2e"],
+                points,
+                india_now_iso(),
+            ),
+        )
+
+        # ----------------------------------------------------
+        # CALCULATE NEW AGGREGATES
+        # ----------------------------------------------------
+
+        current_points = int(
+            user["points"] or 0
+        )
+
+        new_points = (
+            current_points
+            + points
+        )
+
+        new_level = get_level_from_points(
+            new_points
+        )
+
+        current_calculations = int(
+            user["total_calculations"] or 0
+        )
+
+        current_completed_days = int(
+            user["completed_days"] or 0
+        )
+
+        new_total_calculations = (
+            current_calculations + 1
+        )
+
+        new_completed_days = (
+            current_completed_days + 1
+        )
+
+        current_total_co2e = float(
+            user["total_co2e"] or 0
+        )
+
+        current_electricity = float(
+            user["electricity_total"] or 0
+        )
+
+        current_lpg = float(
+            user["lpg_total"] or 0
+        )
+
+        current_water = float(
+            user["water_total"] or 0
+        )
+
+        current_transport = float(
+            user["transport_total"] or 0
+        )
+
+        current_food = float(
+            user["food_total"] or 0
+        )
+
+        current_waste = float(
+            user["waste_total"] or 0
+        )
+
+        new_total_co2e = (
+            current_total_co2e
+            + result["total_co2e"]
+        )
+
+        new_electricity = (
+            current_electricity
+            + result["electricity_co2e"]
+        )
+
+        new_lpg = (
+            current_lpg
+            + result["lpg_co2e"]
+        )
+
+        new_water = (
+            current_water
+            + float(request.water)
+        )
+
+        new_transport = (
+            current_transport
+            + result["transport_co2e"]
+        )
+
+        new_food = (
+            current_food
+            + result["food_co2e"]
+        )
+
+        new_waste = (
+            current_waste
+            + result["waste_co2e"]
+        )
+
+        db.execute(
+            """
+            UPDATE users
+            SET
+                points = ?,
+                level = ?,
+                completed_days = ?,
+                total_calculations = ?,
+                total_co2e = ?,
+                electricity_total = ?,
+                lpg_total = ?,
+                water_total = ?,
+                transport_total = ?,
+                food_total = ?,
+                waste_total = ?
+            WHERE id = ?
+            """,
+            (
+                new_points,
+                new_level,
+                new_completed_days,
+                new_total_calculations,
+                new_total_co2e,
+                new_electricity,
+                new_lpg,
+                new_water,
+                new_transport,
+                new_food,
+                new_waste,
+                user["id"],
+            ),
+        )
+
+        db.commit()
+
+        return {
+            "message": (
+                "Today's footprint was saved."
+            ),
+            "points_earned": points,
+            "result": result,
+            "progress": {
+                "points": new_points,
+                "level": new_level,
+                "completed_days": new_completed_days,
+                "total_calculations": (
+                    new_total_calculations
+                ),
+                "total_co2e": round(
+                    new_total_co2e,
+                    3,
+                ),
+            },
+        }
+
+    except HTTPException:
+
+        db.rollback()
+        raise
+
+    except Exception as error:
+
+        db.rollback()
+
+        print(
+            "SAVE CALCULATION ERROR:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to save carbon calculation.",
+        )
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# CALCULATOR — HISTORY
+# ============================================================
+
+@app.get("/api/calculations/history")
+def calculation_history(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        user = get_current_user(
+            db,
+            token,
+        )
+
+        if not user:
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        rows = db.execute(
+            """
+            SELECT *
+            FROM daily_calculations
+            WHERE user_id = ?
+            ORDER BY calculation_date DESC
+            """,
+            (user["id"],),
+        ).fetchall()
+
+        return {
+            "history": [
+                dict(row)
+                for row in rows
+            ],
+            "count": len(rows),
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# DASHBOARD
+# ============================================================
+
+@app.get("/api/dashboard")
+def dashboard(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        user = get_current_user(
+            db,
+            token,
+        )
+
+        if not user:
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session.",
+            )
+
+        return {
+            "points": int(
+                user["points"] or 0
+            ),
+            "streak": int(
+                user["streak"] or 0
+            ),
+            "level": int(
+                user["level"] or 1
+            ),
+            "forest_actions": int(
+                user["forest_actions"] or 0
+            ),
+            "completed_days": int(
+                user["completed_days"] or 0
+            ),
+            "total_calculations": int(
+                user["total_calculations"] or 0
+            ),
+            "total_co2e": float(
+                user["total_co2e"] or 0
+            ),
+            "total_saved_co2e": float(
+                user["total_saved_co2e"] or 0
+            ),
+            "account_status": user[
+                "account_status"
+            ],
         }
 
     finally:
@@ -2276,7 +3097,8 @@ def complete_challenge(
         completed_at = india_now_iso()
 
         # ----------------------------------------------------
-        # SAVE CHALLENGE COMPLETION
+        # IMPORTANT:
+        # YOUR REAL SUPABASE TABLE HAS category NOT NULL.
         # ----------------------------------------------------
 
         db.execute(
@@ -2285,22 +3107,24 @@ def complete_challenge(
                 user_id,
                 challenge_id,
                 challenge_date,
+                category,
                 completed_at,
                 points
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 user["id"],
                 challenge["id"],
                 today,
+                challenge["category"],
                 completed_at,
                 challenge["points"],
             ),
         )
 
         # ----------------------------------------------------
-        # UPDATE USER PROGRESS
+        # UPDATE USER
         # ----------------------------------------------------
 
         db.execute(
@@ -2389,6 +3213,7 @@ def challenge_history(
             SELECT
                 challenge_id,
                 challenge_date,
+                category,
                 completed_at,
                 points
             FROM challenge_completions
@@ -2418,6 +3243,9 @@ def challenge_history(
                     ],
                     "challenge_date": row[
                         "challenge_date"
+                    ],
+                    "category": row[
+                        "category"
                     ],
                     "completed_at": row[
                         "completed_at"
@@ -2473,7 +3301,7 @@ def forest(
 
 
 # ============================================================
-# FOREST — BADGES ONLY
+# FOREST — BADGES
 # ============================================================
 
 @app.get("/api/forest/badges")
@@ -2521,27 +3349,79 @@ def forest_badges(
 
 
 # ============================================================
-# FOREST — WEATHER
+# WEATHER
 # ============================================================
+
+def weather_code_to_condition(
+    weather_code: int,
+):
+
+    if weather_code == 0:
+        return "clear"
+
+    if weather_code in (1, 2):
+        return "partly_cloudy"
+
+    if weather_code == 3:
+        return "cloudy"
+
+    if weather_code in (45, 48):
+        return "fog"
+
+    if weather_code in (
+        51,
+        53,
+        55,
+        56,
+        57,
+    ):
+        return "drizzle"
+
+    if weather_code in (
+        61,
+        63,
+        65,
+        66,
+        67,
+    ):
+        return "rain"
+
+    if weather_code in (
+        71,
+        73,
+        75,
+        77,
+    ):
+        return "snow"
+
+    if weather_code in (
+        80,
+        81,
+        82,
+    ):
+        return "showers"
+
+    if weather_code in (
+        85,
+        86,
+    ):
+        return "snow_showers"
+
+    if weather_code in (
+        95,
+        96,
+        99,
+    ):
+        return "thunderstorm"
+
+    return "cloudy"
+
 
 @app.get("/api/forest/weather")
 def forest_weather(
     latitude: float = 28.6139,
     longitude: float = 77.2090,
 ):
-
-    """
-    Fetch live weather from Open-Meteo.
-
-    Default:
-        Delhi
-
-    The frontend can provide another location:
-
-        /api/forest/weather?latitude=...&longitude=...
-
-    Open-Meteo does not require an API key.
-    """
 
     query = urllib.parse.urlencode(
         {
@@ -2649,10 +3529,6 @@ def forest_weather(
             else "night"
         )
 
-        # ----------------------------------------------------
-        # COMBINED FOREST ENVIRONMENT
-        # ----------------------------------------------------
-
         theme = (
             f"{season['id']}_"
             f"{condition}_"
@@ -2660,10 +3536,6 @@ def forest_weather(
         )
 
         environment_tags = []
-
-        # ----------------------------------------------------
-        # SEASON TAGS
-        # ----------------------------------------------------
 
         if season["id"] == "spring":
 
@@ -2715,10 +3587,6 @@ def forest_weather(
                 ]
             )
 
-        # ----------------------------------------------------
-        # RAIN TAGS
-        # ----------------------------------------------------
-
         if condition in (
             "rain",
             "drizzle",
@@ -2734,10 +3602,6 @@ def forest_weather(
                 ]
             )
 
-        # ----------------------------------------------------
-        # STORM TAGS
-        # ----------------------------------------------------
-
         if condition == "thunderstorm":
 
             environment_tags.extend(
@@ -2748,10 +3612,6 @@ def forest_weather(
                 ]
             )
 
-        # ----------------------------------------------------
-        # FOG TAGS
-        # ----------------------------------------------------
-
         if condition == "fog":
 
             environment_tags.extend(
@@ -2761,10 +3621,6 @@ def forest_weather(
                 ]
             )
 
-        # ----------------------------------------------------
-        # NIGHT TAGS
-        # ----------------------------------------------------
-
         if not is_day:
 
             environment_tags.extend(
@@ -2773,10 +3629,6 @@ def forest_weather(
                     "nocturnal_ambience",
                 ]
             )
-
-        # ----------------------------------------------------
-        # DAYLIGHT TAGS
-        # ----------------------------------------------------
 
         if is_day and condition in (
             "clear",
@@ -2791,7 +3643,6 @@ def forest_weather(
             )
 
         return {
-
             "location": {
                 "latitude": latitude,
                 "longitude": longitude,
@@ -2899,11 +3750,6 @@ def forest_weather(
 @app.get("/api/forest/season")
 def forest_season():
 
-    """
-    Season is environmental world data,
-    so authentication is not required.
-    """
-
     today = india_now().date()
 
     season = get_current_season(
@@ -2932,11 +3778,18 @@ def forest_season():
 
 
 # ============================================================
-# DASHBOARD
+# ============================================================
+# ADMIN SYSTEM
+# ============================================================
 # ============================================================
 
-@app.get("/api/dashboard")
-def dashboard(
+
+# ============================================================
+# ADMIN — CURRENT ADMIN
+# ============================================================
+
+@app.get("/api/admin/me")
+def admin_me(
     token: str,
 ):
 
@@ -2944,31 +3797,939 @@ def dashboard(
 
     try:
 
-        user = get_current_user(
+        admin = get_admin_user(
             db,
             token,
         )
 
-        if not user:
+        return {
+            "admin": {
+                "id": admin["id"],
+                "username": admin["username"],
+                "role": admin["role"],
+                "account_status": admin[
+                    "account_status"
+                ],
+            }
+        }
 
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid session.",
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — OVERVIEW STATISTICS
+# ============================================================
+
+@app.get("/api/admin/stats")
+def admin_stats(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        total_users_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM users
+            """
+        ).fetchone()
+
+        active_users_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM users
+            WHERE account_status = 'active'
+            """
+        ).fetchone()
+
+        frozen_users_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM users
+            WHERE account_status = 'frozen'
+            """
+        ).fetchone()
+
+        admin_count_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM users
+            WHERE role = 'admin'
+            """
+        ).fetchone()
+
+        calculations_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM daily_calculations
+            """
+        ).fetchone()
+
+        challenges_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM challenge_completions
+            """
+        ).fetchone()
+
+        reviews_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM reviews
+            """
+        ).fetchone()
+
+        carbon_row = db.execute(
+            """
+            SELECT COALESCE(
+                SUM(total_co2e),
+                0
+            ) AS total
+            FROM daily_calculations
+            """
+        ).fetchone()
+
+        points_row = db.execute(
+            """
+            SELECT COALESCE(
+                SUM(points),
+                0
+            ) AS total
+            FROM users
+            """
+        ).fetchone()
+
+        return {
+            "users": {
+                "total": int(
+                    total_users_row["count"]
+                ),
+                "active": int(
+                    active_users_row["count"]
+                ),
+                "frozen": int(
+                    frozen_users_row["count"]
+                ),
+                "admins": int(
+                    admin_count_row["count"]
+                ),
+            },
+
+            "activity": {
+                "calculations": int(
+                    calculations_row["count"]
+                ),
+                "challenges_completed": int(
+                    challenges_row["count"]
+                ),
+                "reviews": int(
+                    reviews_row["count"]
+                ),
+            },
+
+            "impact": {
+                "total_co2e": float(
+                    carbon_row["total"] or 0
+                ),
+                "total_points": int(
+                    points_row["total"] or 0
+                ),
+            },
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — ALL USERS
+# ============================================================
+
+@app.get("/api/admin/users")
+def admin_users(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        rows = db.execute(
+            """
+            SELECT
+                id,
+                username,
+                role,
+                created_at,
+                account_status,
+                points,
+                streak,
+                level,
+                forest_actions,
+                completed_days,
+                total_calculations,
+                total_co2e,
+                total_saved_co2e
+            FROM users
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+        users = []
+
+        for row in rows:
+
+            users.append(
+                {
+                    **dict(row),
+                    "points": int(
+                        row["points"] or 0
+                    ),
+                    "streak": int(
+                        row["streak"] or 0
+                    ),
+                    "level": int(
+                        row["level"] or 1
+                    ),
+                    "forest_actions": int(
+                        row["forest_actions"] or 0
+                    ),
+                    "completed_days": int(
+                        row["completed_days"] or 0
+                    ),
+                    "total_calculations": int(
+                        row["total_calculations"] or 0
+                    ),
+                    "total_co2e": float(
+                        row["total_co2e"] or 0
+                    ),
+                    "total_saved_co2e": float(
+                        row["total_saved_co2e"] or 0
+                    ),
+                }
             )
 
         return {
-            "points": int(
-                user["points"] or 0
+            "users": users,
+            "count": len(users),
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — INDIVIDUAL USER ANALYSIS
+# ============================================================
+
+@app.get("/api/admin/users/{user_id}")
+def admin_user_analysis(
+    user_id: int,
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        user = db.execute(
+            """
+            SELECT
+                id,
+                username,
+                role,
+                created_at,
+                account_status,
+                points,
+                streak,
+                level,
+                forest_actions,
+                completed_days,
+                total_calculations,
+                total_co2e,
+                total_saved_co2e,
+                electricity_total,
+                lpg_total,
+                water_total,
+                transport_total,
+                food_total,
+                waste_total
+            FROM users
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+
+        if not user:
+
+            raise HTTPException(
+                status_code=404,
+                detail="User not found.",
+            )
+
+        # ----------------------------------------------------
+        # CALCULATION HISTORY
+        # ----------------------------------------------------
+
+        calculations = db.execute(
+            """
+            SELECT *
+            FROM daily_calculations
+            WHERE user_id = ?
+            ORDER BY calculation_date DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+        # ----------------------------------------------------
+        # CHALLENGE HISTORY
+        # ----------------------------------------------------
+
+        challenges = db.execute(
+            """
+            SELECT
+                id,
+                challenge_id,
+                challenge_date,
+                category,
+                completed_at,
+                points
+            FROM challenge_completions
+            WHERE user_id = ?
+            ORDER BY challenge_date DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+        # ----------------------------------------------------
+        # SESSION COUNT
+        # ----------------------------------------------------
+
+        sessions_row = db.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM sessions
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+
+        # ----------------------------------------------------
+        # CHALLENGE CATEGORY ANALYSIS
+        # ----------------------------------------------------
+
+        category_rows = db.execute(
+            """
+            SELECT
+                category,
+                COUNT(*) AS count,
+                COALESCE(SUM(points), 0) AS points
+            FROM challenge_completions
+            WHERE user_id = ?
+            GROUP BY category
+            ORDER BY count DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+        # ----------------------------------------------------
+        # CALCULATOR CATEGORY TOTALS
+        # ----------------------------------------------------
+
+        calculation_totals = db.execute(
+            """
+            SELECT
+                COALESCE(SUM(electricity_co2e), 0)
+                    AS electricity_co2e,
+
+                COALESCE(SUM(lpg_co2e), 0)
+                    AS lpg_co2e,
+
+                COALESCE(SUM(transport_co2e), 0)
+                    AS transport_co2e,
+
+                COALESCE(SUM(food_co2e), 0)
+                    AS food_co2e,
+
+                COALESCE(SUM(waste_co2e), 0)
+                    AS waste_co2e,
+
+                COALESCE(SUM(total_co2e), 0)
+                    AS total_co2e
+            FROM daily_calculations
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+
+        return {
+            "user": dict(user),
+
+            "summary": {
+                "points": int(
+                    user["points"] or 0
+                ),
+                "streak": int(
+                    user["streak"] or 0
+                ),
+                "level": int(
+                    user["level"] or 1
+                ),
+                "forest_actions": int(
+                    user["forest_actions"] or 0
+                ),
+                "completed_days": int(
+                    user["completed_days"] or 0
+                ),
+                "total_calculations": int(
+                    user["total_calculations"] or 0
+                ),
+                "total_co2e": float(
+                    user["total_co2e"] or 0
+                ),
+                "total_saved_co2e": float(
+                    user["total_saved_co2e"] or 0
+                ),
+                "sessions": int(
+                    sessions_row["count"]
+                ),
+            },
+
+            "carbon": {
+                "electricity_co2e": float(
+                    calculation_totals[
+                        "electricity_co2e"
+                    ] or 0
+                ),
+                "lpg_co2e": float(
+                    calculation_totals[
+                        "lpg_co2e"
+                    ] or 0
+                ),
+                "transport_co2e": float(
+                    calculation_totals[
+                        "transport_co2e"
+                    ] or 0
+                ),
+                "food_co2e": float(
+                    calculation_totals[
+                        "food_co2e"
+                    ] or 0
+                ),
+                "waste_co2e": float(
+                    calculation_totals[
+                        "waste_co2e"
+                    ] or 0
+                ),
+                "total_co2e": float(
+                    calculation_totals[
+                        "total_co2e"
+                    ] or 0
+                ),
+            },
+
+            "challenge_categories": [
+                dict(row)
+                for row in category_rows
+            ],
+
+            "calculations": [
+                dict(row)
+                for row in calculations
+            ],
+
+            "challenges": [
+                dict(row)
+                for row in challenges
+            ],
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — FREEZE / UNFREEZE ACCOUNT
+# ============================================================
+
+@app.post("/api/admin/users/status")
+def admin_change_user_status(
+    request: AdminUserStatusRequest,
+):
+
+    if request.status not in (
+        "active",
+        "frozen",
+    ):
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Status must be "
+                "'active' or 'frozen'."
             ),
-            "streak": int(
-                user["streak"] or 0
+        )
+
+    db = get_db()
+
+    try:
+
+        admin = get_admin_user(
+            db,
+            request.token,
+        )
+
+        target = db.execute(
+            """
+            SELECT
+                id,
+                username,
+                role,
+                account_status
+            FROM users
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (request.user_id,),
+        ).fetchone()
+
+        if not target:
+
+            raise HTTPException(
+                status_code=404,
+                detail="User not found.",
+            )
+
+        # ----------------------------------------------------
+        # PROTECT THE CURRENT ADMIN FROM ACCIDENTALLY
+        # FREEZING THEMSELVES.
+        # ----------------------------------------------------
+
+        if (
+            int(target["id"])
+            == int(admin["id"])
+            and request.status == "frozen"
+        ):
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "You cannot freeze your own "
+                    "administrator account."
+                ),
+            )
+
+        db.execute(
+            """
+            UPDATE users
+            SET account_status = ?
+            WHERE id = ?
+            """,
+            (
+                request.status,
+                request.user_id,
             ),
-            "level": int(
-                user["level"] or 1
+        )
+
+        # ----------------------------------------------------
+        # FREEZING ALSO INVALIDATES EXISTING SESSIONS.
+        #
+        # The account remains in the database.
+        # Password remains unchanged.
+        # Data remains unchanged.
+        # ----------------------------------------------------
+
+        if request.status == "frozen":
+
+            db.execute(
+                """
+                DELETE FROM sessions
+                WHERE user_id = ?
+                """,
+                (request.user_id,),
+            )
+
+        db.commit()
+
+        return {
+            "message": (
+                "Account frozen."
+                if request.status == "frozen"
+                else "Account unfrozen."
             ),
-            "forest_actions": int(
-                user["forest_actions"] or 0
-            ),
+            "user": {
+                "id": target["id"],
+                "username": target["username"],
+                "role": target["role"],
+                "account_status": request.status,
+            },
+        }
+
+    except HTTPException:
+
+        db.rollback()
+        raise
+
+    except Exception as error:
+
+        db.rollback()
+
+        print(
+            "ADMIN STATUS ERROR:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to change account status.",
+        )
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — FREEZE SHORTCUT
+# ============================================================
+
+@app.post("/api/admin/users/{user_id}/freeze")
+def admin_freeze_user(
+    user_id: int,
+    token: str,
+):
+
+    return admin_change_user_status(
+        AdminUserStatusRequest(
+            token=token,
+            user_id=user_id,
+            status="frozen",
+        )
+    )
+
+
+# ============================================================
+# ADMIN — UNFREEZE SHORTCUT
+# ============================================================
+
+@app.post("/api/admin/users/{user_id}/unfreeze")
+def admin_unfreeze_user(
+    user_id: int,
+    token: str,
+):
+
+    return admin_change_user_status(
+        AdminUserStatusRequest(
+            token=token,
+            user_id=user_id,
+            status="active",
+        )
+    )
+
+
+# ============================================================
+# ADMIN — REVIEWS
+# ============================================================
+
+@app.get("/api/admin/reviews")
+def admin_reviews(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        rows = db.execute(
+            """
+            SELECT
+                id,
+                name,
+                rating,
+                review,
+                created_at,
+                owner_token
+            FROM reviews
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+        return {
+            "reviews": [
+                dict(row)
+                for row in rows
+            ],
+            "count": len(rows),
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — SEARCH USERS
+# ============================================================
+
+@app.get("/api/admin/users/search")
+def admin_search_users(
+    token: str,
+    q: str = "",
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        search = q.strip()
+
+        if not search:
+
+            rows = db.execute(
+                """
+                SELECT
+                    id,
+                    username,
+                    role,
+                    account_status,
+                    points,
+                    streak,
+                    level,
+                    forest_actions,
+                    completed_days,
+                    total_calculations,
+                    total_co2e
+                FROM users
+                ORDER BY id DESC
+                LIMIT 100
+                """
+            ).fetchall()
+
+        else:
+
+            rows = db.execute(
+                """
+                SELECT
+                    id,
+                    username,
+                    role,
+                    account_status,
+                    points,
+                    streak,
+                    level,
+                    forest_actions,
+                    completed_days,
+                    total_calculations,
+                    total_co2e
+                FROM users
+                WHERE username ILIKE ?
+                ORDER BY id DESC
+                LIMIT 100
+                """,
+                (
+                    f"%{search}%",
+                ),
+            ).fetchall()
+
+        return {
+            "users": [
+                dict(row)
+                for row in rows
+            ],
+            "count": len(rows),
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — ALL CALCULATIONS
+# ============================================================
+
+@app.get("/api/admin/calculations")
+def admin_calculations(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        rows = db.execute(
+            """
+            SELECT
+                daily_calculations.*,
+                users.username
+            FROM daily_calculations
+            JOIN users
+                ON users.id =
+                   daily_calculations.user_id
+            ORDER BY
+                daily_calculations.calculation_date DESC,
+                daily_calculations.id DESC
+            LIMIT 1000
+            """
+        ).fetchall()
+
+        return {
+            "calculations": [
+                dict(row)
+                for row in rows
+            ],
+            "count": len(rows),
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — ALL CHALLENGES
+# ============================================================
+
+@app.get("/api/admin/challenges")
+def admin_challenges(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        rows = db.execute(
+            """
+            SELECT
+                challenge_completions.*,
+                users.username
+            FROM challenge_completions
+            JOIN users
+                ON users.id =
+                   challenge_completions.user_id
+            ORDER BY
+                challenge_completions.challenge_date DESC,
+                challenge_completions.id DESC
+            LIMIT 1000
+            """
+        ).fetchall()
+
+        return {
+            "challenges": [
+                dict(row)
+                for row in rows
+            ],
+            "count": len(rows),
+        }
+
+    finally:
+
+        db.close()
+
+
+# ============================================================
+# ADMIN — USER ACTIVITY SUMMARY
+# ============================================================
+
+@app.get("/api/admin/activity")
+def admin_activity(
+    token: str,
+):
+
+    db = get_db()
+
+    try:
+
+        get_admin_user(
+            db,
+            token,
+        )
+
+        calculation_activity = db.execute(
+            """
+            SELECT
+                calculation_date,
+                COUNT(*) AS count,
+                COALESCE(
+                    SUM(total_co2e),
+                    0
+                ) AS total_co2e
+            FROM daily_calculations
+            GROUP BY calculation_date
+            ORDER BY calculation_date DESC
+            LIMIT 90
+            """
+        ).fetchall()
+
+        challenge_activity = db.execute(
+            """
+            SELECT
+                challenge_date,
+                COUNT(*) AS count,
+                COALESCE(
+                    SUM(points),
+                    0
+                ) AS points
+            FROM challenge_completions
+            GROUP BY challenge_date
+            ORDER BY challenge_date DESC
+            LIMIT 90
+            """
+        ).fetchall()
+
+        return {
+            "calculations": [
+                dict(row)
+                for row in calculation_activity
+            ],
+            "challenges": [
+                dict(row)
+                for row in challenge_activity
+            ],
         }
 
     finally:
@@ -3005,6 +4766,21 @@ def startup_message():
     print(
         "CURRENT SEASON:",
         current_season["name"],
+    )
+
+    print(
+        "ADMIN SYSTEM:",
+        "ENABLED",
+    )
+
+    print(
+        "ACCOUNT CONTROL:",
+        "FREEZE / UNFREEZE ENABLED",
+    )
+
+    print(
+        "DAILY CALCULATIONS:",
+        "SUPABASE PERSISTENCE ENABLED",
     )
 
     print("----------------------------------------")

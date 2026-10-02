@@ -1,474 +1,624 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./Forest.css";
 
-/* =========================================================
-   GREEN PULSE — FOREST EXPERIENCE
-   ========================================================= */
+/*
+  GREEN PULSE — FOREST
+  ------------------------------------------------
+  Previous Forest concept preserved + upgraded with:
 
-const SEASONS = ["Spring", "Summer", "Autumn", "Winter"];
-const WEATHER = ["Clear", "Rain", "Storm", "Snow", "Fog"];
+  • Automatic system-time atmosphere
+  • Dawn / Day / Dusk / Night
+  • Rain / Mystic atmosphere modes
+  • Cave
+  • Campfire
+  • Invisible Guardian storyteller
+  • Temporary 3–5 line dialogue
+  • Long story progression
+  • Guardian voice using browser SpeechSynthesis
+  • Forest ambience using Web Audio
+  • Live Calculator data
+  • Trees based on progress
+*/
 
-const ANIMALS = [
-  { id: "deer", name: "Deer", emoji: "🦌", points: 5 },
-  { id: "rabbit", name: "Rabbit", emoji: "🐇", points: 3 },
-  { id: "fox", name: "Fox", emoji: "🦊", points: 7 },
-  { id: "bird", name: "Bird", emoji: "🦜", points: 2 },
-  { id: "butterfly", name: "Butterfly", emoji: "🦋", points: 2 },
+const DATA_KEY = "greenpulse_year_data";
+
+const LEVELS = [
+  { min: 0, name: "Eco Starter", icon: "🌱" },
+  { min: 100, name: "Green Explorer", icon: "🍃" },
+  { min: 250, name: "Eco Learner", icon: "🌿" },
+  { min: 500, name: "Climate Champion", icon: "🌳" },
+  { min: 1000, name: "Planet Protector", icon: "🌲" },
+  { min: 2000, name: "Green Leader", icon: "🌎" },
+  { min: 5000, name: "Earth Guardian", icon: "🌍" },
 ];
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+/* ------------------------------------------------
+   GUARDIAN STORY
+   The story is long, but the interface only
+   reveals a few lines at a time.
+------------------------------------------------ */
+
+const STORY = [
+  {
+    speaker: "The Guardian",
+    lines: [
+      "Long before your roads reached these trees, the forest already knew your footsteps.",
+      "It remembered every traveller who came quietly...",
+      "and every traveller who took more than they needed.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "Do not look toward the cave.",
+      "There is nothing there that wishes to be seen.",
+      "Listen instead.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "You hear the fire, don't you?",
+      "That fire has burned beneath these stones longer than your oldest stories.",
+      "It burns because someone remembers to feed it.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "A forest is not made from trees alone.",
+      "It is made from everything that happens between them.",
+      "Rain. Silence. Roots. Footsteps. Breath.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "Once, a young traveller came here carrying a bright lantern.",
+      "He believed light would make him fearless.",
+      "The forest taught him otherwise.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "He walked until the lantern became useless.",
+      "Then he sat beneath an old tree.",
+      "For the first time, he heard the forest breathing.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "He asked, 'Who is there?'",
+      "I did not answer.",
+      "He asked again.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "Still, I remained silent.",
+      "Some answers become smaller when spoken aloud.",
+      "Some mysteries are meant to be experienced.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "At midnight he finally understood.",
+      "The forest had never been empty.",
+      "He was simply too loud to notice it.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "So he extinguished his lantern.",
+      "And beneath the darkness, thousands of tiny lives appeared.",
+      "Fireflies. Owls. Beetles. Leaves moving in the wind.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "That was the night he stopped asking what the forest could give him.",
+      "He began asking what he could give back.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "Remember this when you leave.",
+      "A tree does not ask who planted it.",
+      "It simply grows where it is given a chance.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "Your smallest choices are roots.",
+      "You may never see how far they travel.",
+      "But somewhere, something may grow from them.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "You calculated your footprint.",
+      "Good.",
+      "But numbers are only the beginning of understanding.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "The real question is what you do after seeing the number.",
+      "Will tomorrow repeat today?",
+      "Or will something change?",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "Listen carefully.",
+      "The wind is changing.",
+      "Even the forest knows that nothing remains the same forever.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "If you return here tomorrow, perhaps I will speak again.",
+      "Perhaps I will remain silent.",
+      "Perhaps you will finally hear me without needing words.",
+    ],
+  },
+  {
+    speaker: "The Guardian",
+    lines: [
+      "I am everywhere.",
+      "Never try to see me.",
+      "The forest is enough.",
+    ],
+  },
+];
+
+/* ------------------------------------------------
+   HELPERS
+------------------------------------------------ */
+
+function number(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function getTimePhase(hour, minute) {
-  const t = hour + minute / 60;
+function readData() {
+  try {
+    const raw = localStorage.getItem(DATA_KEY);
+    if (!raw) return {};
 
-  if (t >= 5 && t < 7) return "Dawn";
-  if (t >= 7 && t < 10) return "Morning";
-  if (t >= 10 && t < 16) return "Day";
-  if (t >= 16 && t < 18.5) return "Golden Hour";
-  if (t >= 18.5 && t < 20) return "Dusk";
-  return "Night";
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
-function getSkyClass(phase) {
-  return phase.toLowerCase().replace(" ", "-");
+function getSystemAtmosphere() {
+  const hour = new Date().getHours();
+
+  if (hour >= 5 && hour < 8) return "dawn";
+  if (hour >= 8 && hour < 17) return "day";
+  if (hour >= 17 && hour < 20) return "dusk";
+  return "night";
 }
 
-function SafeImage({ src, alt, className = "" }) {
-  const [failed, setFailed] = useState(false);
+function getLevel(points) {
+  let current = LEVELS[0];
 
-  if (failed || !src) {
-    return (
-      <div className={`image-fallback ${className}`}>
-        <span>🌿</span>
-      </div>
-    );
+  for (const level of LEVELS) {
+    if (points >= level.min) {
+      current = level;
+    }
   }
 
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onError={() => setFailed(true)}
-    />
-  );
+  return current;
 }
 
-/* =========================================================
-   ANIMAL COMPONENTS
-   ========================================================= */
+function getNextLevel(points) {
+  return LEVELS.find((level) => level.min > points) || null;
+}
 
-function CSSDeer({ fed, onFeed }) {
+function formatTime() {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+/* ------------------------------------------------
+   TREE
+------------------------------------------------ */
+
+function ForestTree({ size = "normal", x, y, delay = 0, onClick }) {
   return (
     <button
-      className={`css-animal deer-animal ${fed ? "animal-fed" : ""}`}
-      onClick={onFeed}
-      title="Feed the deer"
+      className={`forest-tree forest-tree-${size}`}
+      style={{
+        left: `${x}%`,
+        top: `${y}%`,
+        animationDelay: `${delay}s`,
+      }}
+      onClick={onClick}
+      aria-label="Forest tree"
     >
-      <span className="deer-antler left-antler">♣</span>
-      <span className="deer-antler right-antler">♣</span>
-      <span className="deer-head">
-        <span className="deer-ear left-ear" />
-        <span className="deer-ear right-ear" />
-        <span className="deer-eye" />
-        <span className="deer-nose" />
-      </span>
-      <span className="deer-body" />
-      <span className="deer-leg leg-1" />
-      <span className="deer-leg leg-2" />
-      <span className="deer-leg leg-3" />
-      <span className="deer-leg leg-4" />
-      <span className="deer-tail">◆</span>
-      {fed && <span className="animal-heart">♥</span>}
+      <span className="tree-glow" />
+      <span className="tree-crown crown-one" />
+      <span className="tree-crown crown-two" />
+      <span className="tree-crown crown-three" />
+      <span className="tree-trunk" />
     </button>
   );
 }
 
-function CSSFox({ fed, onFeed }) {
-  return (
-    <button
-      className={`css-animal fox-animal ${fed ? "animal-fed" : ""}`}
-      onClick={onFeed}
-      title="Feed the fox"
-    >
-      <span className="fox-tail">〰</span>
-      <span className="fox-body" />
-      <span className="fox-head">
-        <span className="fox-ear fox-ear-left" />
-        <span className="fox-ear fox-ear-right" />
-        <span className="fox-eye fox-eye-left" />
-        <span className="fox-eye fox-eye-right" />
-        <span className="fox-muzzle" />
-      </span>
-      <span className="fox-leg fox-leg-1" />
-      <span className="fox-leg fox-leg-2" />
-      <span className="fox-leg fox-leg-3" />
-      <span className="fox-leg fox-leg-4" />
-      {fed && <span className="animal-heart">♥</span>}
-    </button>
-  );
-}
-
-function CSSRabbit({ onFeed }) {
-  return (
-    <button
-      className="css-animal rabbit-animal"
-      onClick={onFeed}
-      title="Feed the rabbit"
-    >
-      <span className="rabbit-ear rabbit-ear-1" />
-      <span className="rabbit-ear rabbit-ear-2" />
-      <span className="rabbit-head">
-        <span className="rabbit-eye" />
-        <span className="rabbit-nose" />
-      </span>
-      <span className="rabbit-body" />
-      <span className="rabbit-foot" />
-      <span className="rabbit-tail">●</span>
-    </button>
-  );
-}
-
-/* =========================================================
-   CAMEL
-   IMPORTANT: camel is ALWAYS rendered.
-   It does not depend on scroll position.
-   ========================================================= */
-
-function CSSCamel({ onFeed }) {
-  return (
-    <button
-      className="css-camel"
-      onClick={onFeed}
-      title="Feed the camel"
-      aria-label="Camel"
-    >
-      <span className="camel-hump camel-hump-one" />
-      <span className="camel-hump camel-hump-two" />
-
-      <span className="camel-body" />
-
-      <span className="camel-neck" />
-
-      <span className="camel-head">
-        <span className="camel-ear camel-ear-one" />
-        <span className="camel-ear camel-ear-two" />
-        <span className="camel-eye" />
-        <span className="camel-muzzle" />
-      </span>
-
-      <span className="camel-leg camel-leg-one" />
-      <span className="camel-leg camel-leg-two" />
-      <span className="camel-leg camel-leg-three" />
-      <span className="camel-leg camel-leg-four" />
-
-      <span className="camel-tail">〰</span>
-    </button>
-  );
-}
-
-/* =========================================================
+/* ------------------------------------------------
    MAIN COMPONENT
-   ========================================================= */
+------------------------------------------------ */
 
 export default function Forest() {
-  const [now, setNow] = useState(new Date());
+  const navigate = useNavigate();
 
-  const [season, setSeason] = useState(
-    () => localStorage.getItem("gp_forest_season") || "Spring"
+  const [data, setData] = useState(() => readData());
+
+  const [atmosphere, setAtmosphere] = useState(() =>
+    getSystemAtmosphere()
   );
 
-  const [weather, setWeather] = useState(
-    () => localStorage.getItem("gp_forest_weather") || "Clear"
-  );
+  const [manualMode, setManualMode] = useState(false);
 
-  const [forestEntered, setForestEntered] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(true);
-  const [caveOpen, setCaveOpen] = useState(false);
-  const [gardenOpen, setGardenOpen] = useState(false);
-  const [campfire, setCampfire] = useState(false);
+  const [selectedTree, setSelectedTree] = useState(null);
 
-  const [dogName, setDogName] = useState(
-    () => localStorage.getItem("gp_dog_name") || "Buddy"
-  );
+  const [guardianSpeaking, setGuardianSpeaking] = useState(false);
 
-  const [dogFed, setDogFed] = useState(false);
-  const [animalFed, setAnimalFed] = useState({});
-  const [lionAwake, setLionAwake] = useState(false);
+  const [storyIndex, setStoryIndex] = useState(-1);
 
-  const [points, setPoints] = useState(
-    () => Number(localStorage.getItem("gp_forest_points") || 0)
-  );
+  const [storyLines, setStoryLines] = useState([]);
 
-  const [gardenGrowth, setGardenGrowth] = useState(
-    () => Number(localStorage.getItem("gp_garden_growth") || 15)
-  );
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
 
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [rainEnabled, setRainEnabled] = useState(false);
+  const [ambientOn, setAmbientOn] = useState(true);
 
-  const [toast, setToast] = useState("");
+  const [fireOn, setFireOn] = useState(true);
+
+  const [firePulse, setFirePulse] = useState(false);
+
+  const [rainDrops, setRainDrops] = useState([]);
+
+  const [campfireOpen, setCampfireOpen] = useState(false);
 
   const audioContextRef = useRef(null);
-  const ambientRef = useRef(null);
-  const chirpTimerRef = useRef(null);
 
-  /* =======================================================
-     CLOCK
-     ======================================================= */
+  const ambientGainRef = useRef(null);
+
+  const fireGainRef = useRef(null);
+
+  const voiceTimerRef = useRef(null);
+
+  /* ---------------------------------------------
+     DATA REFRESH
+  --------------------------------------------- */
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 1000);
+    const refresh = () => {
+      setData(readData());
+    };
 
-    return () => clearInterval(timer);
+    window.addEventListener("storage", refresh);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("greenpulse:data-updated", refresh);
+
+    const timer = window.setInterval(refresh, 2500);
+
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(
+        "greenpulse:data-updated",
+        refresh
+      );
+
+      window.clearInterval(timer);
+    };
   }, []);
 
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const second = now.getSeconds();
-
-  const phase = getTimePhase(hour, minute);
-
-  /* =======================================================
-     PERSISTENCE
-     ======================================================= */
+  /* ---------------------------------------------
+     SYSTEM TIME
+  --------------------------------------------- */
 
   useEffect(() => {
-    localStorage.setItem("gp_forest_season", season);
-  }, [season]);
+    if (manualMode) return;
+
+    const update = () => {
+      setAtmosphere(getSystemAtmosphere());
+    };
+
+    update();
+
+    const timer = window.setInterval(update, 60000);
+
+    return () => window.clearInterval(timer);
+  }, [manualMode]);
+
+  /* ---------------------------------------------
+     DATA
+  --------------------------------------------- */
+
+  const points = number(data.total_points);
+
+  const completedDays = number(data.completed_days);
+
+  const streak = number(data.streak);
+
+  const totalCO2 = number(
+    data.total_co2e ??
+      data.totalCO2 ??
+      data.total_saved_co2e
+  );
+
+  const level = getLevel(points);
+
+  const nextLevel = getNextLevel(points);
+
+  const levelProgress = nextLevel
+    ? Math.min(
+        100,
+        Math.max(
+          0,
+          ((points - level.min) /
+            (nextLevel.min - level.min)) *
+            100
+        )
+      )
+    : 100;
+
+  const treeCount = Math.min(
+    42,
+    Math.max(
+      5,
+      Math.floor(completedDays / 2) + Math.floor(points / 150)
+    )
+  );
+
+  /* ---------------------------------------------
+     TREE POSITIONS
+  --------------------------------------------- */
+
+  const trees = useMemo(() => {
+    const base = [
+      [7, 48],
+      [13, 34],
+      [18, 56],
+      [24, 30],
+      [29, 49],
+      [35, 25],
+      [40, 40],
+      [46, 20],
+      [52, 33],
+      [57, 18],
+      [63, 38],
+      [68, 25],
+      [74, 45],
+      [80, 30],
+      [87, 50],
+      [93, 35],
+      [10, 67],
+      [20, 72],
+      [31, 64],
+      [43, 70],
+      [55, 62],
+      [66, 69],
+      [78, 65],
+      [90, 70],
+      [4, 78],
+      [15, 82],
+      [28, 79],
+      [41, 83],
+      [58, 81],
+      [72, 84],
+      [86, 80],
+      [96, 76],
+      [34, 57],
+      [61, 52],
+      [76, 55],
+      [89, 58],
+      [12, 44],
+      [48, 55],
+      [70, 50],
+      [82, 42],
+      [95, 53],
+    ];
+
+    return base.slice(0, treeCount).map((position, index) => ({
+      id: index,
+      x: position[0],
+      y: position[1],
+      size:
+        index % 7 === 0
+          ? "large"
+          : index % 3 === 0
+          ? "small"
+          : "normal",
+    }));
+  }, [treeCount]);
+
+  /* ---------------------------------------------
+     RAIN
+  --------------------------------------------- */
 
   useEffect(() => {
-    localStorage.setItem("gp_forest_weather", weather);
-  }, [weather]);
-
-  useEffect(() => {
-    localStorage.setItem("gp_dog_name", dogName);
-  }, [dogName]);
-
-  useEffect(() => {
-    localStorage.setItem("gp_forest_points", points);
-  }, [points]);
-
-  useEffect(() => {
-    localStorage.setItem("gp_garden_growth", gardenGrowth);
-  }, [gardenGrowth]);
-
-  /* =======================================================
-     TOAST
-     ======================================================= */
-
-  const showToast = (message) => {
-    setToast(message);
-
-    window.clearTimeout(showToast.timer);
-
-    showToast.timer = window.setTimeout(() => {
-      setToast("");
-    }, 2200);
-  };
-
-  /* =======================================================
-     POINTS
-     ======================================================= */
-
-  const addPoints = (amount, message) => {
-    setPoints((value) => value + amount);
-    setGardenGrowth((value) => clamp(value + amount * 0.7, 0, 100));
-
-    if (message) {
-      showToast(`+${amount} Green Points • ${message}`);
-    }
-  };
-
-  /* =======================================================
-     DOG
-     ======================================================= */
-
-  const feedDog = () => {
-    if (dogFed) {
-      showToast(`${dogName} has already been fed today 🐕`);
+    if (atmosphere !== "rain") {
+      setRainDrops([]);
       return;
     }
 
-    setDogFed(true);
-    addPoints(5, `${dogName} enjoyed the meal`);
-  };
-
-  /* =======================================================
-     ANIMALS
-     ======================================================= */
-
-  const feedAnimal = (id) => {
-    if (animalFed[id]) {
-      showToast("This animal has already been fed today.");
-      return;
-    }
-
-    const animal = ANIMALS.find((item) => item.id === id);
-
-    setAnimalFed((old) => ({
-      ...old,
-      [id]: true,
+    const drops = Array.from({ length: 80 }, (_, index) => ({
+      id: index,
+      left: Math.random() * 100,
+      delay: Math.random() * 3,
+      duration: 0.6 + Math.random() * 0.8,
     }));
 
-    addPoints(animal?.points || 2, `${animal?.name || "Animal"} fed`);
-  };
+    setRainDrops(drops);
+  }, [atmosphere]);
 
-  /* =======================================================
-     CAMEL
-     ======================================================= */
-
-  const feedCamel = () => {
-    addPoints(4, "The camel enjoyed some food 🐪");
-  };
-
-  /* =======================================================
-     LION
-     ======================================================= */
-
-  const wakeLion = () => {
-    setLionAwake(true);
-    addPoints(3, "You woke the lion carefully");
-    showToast("The lion slowly wakes up... 🦁");
-  };
-
-  /* =======================================================
-     WEATHER
-     ======================================================= */
-
-  const changeWeather = (value) => {
-    setWeather(value);
-    setRainEnabled(value === "Rain" || value === "Storm");
-
-    showToast(`${value} weather activated`);
-  };
-
-  /* =======================================================
+  /* ---------------------------------------------
      WEB AUDIO AMBIENCE
-     ======================================================= */
+  --------------------------------------------- */
 
-  const stopAmbientSound = () => {
-    if (chirpTimerRef.current) {
-      clearTimeout(chirpTimerRef.current);
-      chirpTimerRef.current = null;
+  function createAudio() {
+    if (audioContextRef.current) {
+      return audioContextRef.current;
     }
 
-    if (ambientRef.current) {
-      try {
-        ambientRef.current.stop();
-      } catch {
-        // already stopped
-      }
+    const AudioContext =
+      window.AudioContext ||
+      window.webkitAudioContext;
 
-      ambientRef.current = null;
+    if (!AudioContext) return null;
+
+    const ctx = new AudioContext();
+
+    audioContextRef.current = ctx;
+
+    return ctx;
+  }
+
+  function startAmbient() {
+    const ctx = createAudio();
+
+    if (!ctx) return;
+
+    if (ctx.state === "suspended") {
+      ctx.resume();
     }
-  };
 
-  const playChirp = () => {
-    const ctx = audioContextRef.current;
+    if (ambientGainRef.current) return;
 
-    if (!ctx || !soundEnabled) return;
+    const master = ctx.createGain();
+
+    master.gain.value = 0.025;
+
+    master.connect(ctx.destination);
+
+    const oscillator = ctx.createOscillator();
+
+    oscillator.type = "sine";
+
+    oscillator.frequency.value = 96;
+
+    const filter = ctx.createBiquadFilter();
+
+    filter.type = "lowpass";
+
+    filter.frequency.value = 240;
+
+    oscillator.connect(filter);
+    filter.connect(master);
+
+    oscillator.start();
+
+    ambientGainRef.current = master;
+  }
+
+  function stopAmbient() {
+    if (ambientGainRef.current) {
+      ambientGainRef.current.gain.exponentialRampToValueAtTime(
+        0.0001,
+        (audioContextRef.current?.currentTime || 0) + 0.4
+      );
+
+      window.setTimeout(() => {
+        ambientGainRef.current = null;
+      }, 450);
+    }
+  }
+
+  function playFireSound() {
+    const ctx = createAudio();
+
+    if (!ctx) return;
+
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
 
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    oscillator.type = "sine";
+    oscillator.type = "triangle";
 
-    const base = 1500 + Math.random() * 900;
-    const end = base + 500 + Math.random() * 700;
+    oscillator.frequency.value =
+      80 + Math.random() * 100;
 
-    oscillator.frequency.setValueAtTime(base, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      end,
-      ctx.currentTime + 0.11
-    );
-
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(
-      0.035,
-      ctx.currentTime + 0.015
-    );
-
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      ctx.currentTime + 0.2
-    );
+    gain.gain.value = 0.0001;
 
     oscillator.connect(gain);
     gain.connect(ctx.destination);
 
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.21);
+    const now = ctx.currentTime;
 
-    chirpTimerRef.current = setTimeout(
-      playChirp,
-      1200 + Math.random() * 3500
+    gain.gain.exponentialRampToValueAtTime(
+      0.04,
+      now + 0.02
     );
-  };
 
-  const startAmbientSound = async () => {
-    const AudioContext =
-      window.AudioContext || window.webkitAudioContext;
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      now + 0.25
+    );
 
-    if (!AudioContext) {
-      showToast("Ambient sound is not supported by this browser.");
-      return;
+    oscillator.start(now);
+    oscillator.stop(now + 0.3);
+  }
+
+  useEffect(() => {
+    if (ambientOn) {
+      startAmbient();
+    } else {
+      stopAmbient();
     }
+  }, [ambientOn]);
 
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
-    }
+  useEffect(() => {
+    if (!fireOn) return;
 
-    const ctx = audioContextRef.current;
+    const interval = window.setInterval(() => {
+      playFireSound();
+      setFirePulse(true);
 
-    if (ctx.state === "suspended") {
-      await ctx.resume();
-    }
+      window.setTimeout(() => {
+        setFirePulse(false);
+      }, 280);
+    }, 1100);
 
-    setSoundEnabled(true);
+    return () => window.clearInterval(interval);
+  }, [fireOn]);
 
-    if (!ambientRef.current) {
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const filter = ctx.createBiquadFilter();
-
-      oscillator.type = "sine";
-      oscillator.frequency.value = 90;
-
-      filter.type = "lowpass";
-      filter.frequency.value = 420;
-
-      gain.gain.value = 0.008;
-
-      oscillator.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
-
-      oscillator.start();
-
-      ambientRef.current = oscillator;
-    }
-
-    playChirp();
-  };
-
-  const toggleSound = async () => {
-    if (soundEnabled) {
-      stopAmbientSound();
-      setSoundEnabled(false);
-      return;
-    }
-
-    await startAmbientSound();
-  };
+  /* ---------------------------------------------
+     CLEANUP AUDIO / SPEECH
+  --------------------------------------------- */
 
   useEffect(() => {
     return () => {
-      stopAmbientSound();
+      if (voiceTimerRef.current) {
+        window.clearTimeout(voiceTimerRef.current);
+      }
+
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
 
       if (audioContextRef.current) {
         audioContextRef.current.close();
@@ -476,817 +626,863 @@ export default function Forest() {
     };
   }, []);
 
-  /* =======================================================
-     NAVIGATION
-     ======================================================= */
+  /* ---------------------------------------------
+     GUARDIAN VOICE
+  --------------------------------------------- */
 
-  const enterForest = () => {
-    setForestEntered(true);
+  function speakGuardian(text) {
+    if (!voiceEnabled) return;
 
-    setTimeout(() => {
-      document
-        .getElementById("forest-world")
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    }, 80);
+    if (!("speechSynthesis" in window)) return;
+
+    window.speechSynthesis.cancel();
+
+    const utterance =
+      new SpeechSynthesisUtterance(text);
+
+    utterance.rate = 0.72;
+    utterance.pitch = 0.55;
+    utterance.volume = 0.9;
+    utterance.lang = "en-IN";
+
+    const voices =
+      window.speechSynthesis.getVoices();
+
+    const preferred =
+      voices.find((voice) =>
+        /en.*(IN|GB|US)/i.test(voice.lang)
+      ) || voices.find((voice) =>
+        /^en/i.test(voice.lang)
+      );
+
+    if (preferred) {
+      utterance.voice = preferred;
+    }
+
+    utterance.onstart = () => {
+      setGuardianSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setGuardianSpeaking(false);
+    };
+
+    utterance.onerror = () => {
+      setGuardianSpeaking(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }
+
+  /* ---------------------------------------------
+     GUARDIAN STORY
+  --------------------------------------------- */
+
+  function revealGuardianStory(index) {
+    const safeIndex =
+      index >= 0 && index < STORY.length
+        ? index
+        : 0;
+
+    const entry = STORY[safeIndex];
+
+    setStoryIndex(safeIndex);
+
+    setStoryLines(entry.lines);
+
+    speakGuardian(entry.lines.join(" "));
+
+    if (voiceTimerRef.current) {
+      window.clearTimeout(voiceTimerRef.current);
+    }
+
+    voiceTimerRef.current = window.setTimeout(() => {
+      setStoryLines([]);
+    }, Math.max(9000, entry.lines.join(" ").length * 65));
+  }
+
+  function awakenGuardian() {
+    const next =
+      storyIndex < 0
+        ? 0
+        : (storyIndex + 1) % STORY.length;
+
+    revealGuardianStory(next);
+  }
+
+  function nextStory() {
+    const next =
+      storyIndex < 0
+        ? 0
+        : (storyIndex + 1) % STORY.length;
+
+    revealGuardianStory(next);
+  }
+
+  function previousStory() {
+    const previous =
+      storyIndex <= 0
+        ? STORY.length - 1
+        : storyIndex - 1;
+
+    revealGuardianStory(previous);
+  }
+
+  function stopGuardian() {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    setGuardianSpeaking(false);
+    setStoryLines([]);
+
+    if (voiceTimerRef.current) {
+      window.clearTimeout(voiceTimerRef.current);
+    }
+  }
+
+  /* ---------------------------------------------
+     CAMPFIRE
+  --------------------------------------------- */
+
+  function interactWithFire() {
+    setCampfireOpen((value) => !value);
+
+    if (fireOn) {
+      playFireSound();
+    }
+
+    if (!guardianSpeaking) {
+      revealGuardianStory(
+        storyIndex < 0
+          ? 2
+          : (storyIndex + 1) % STORY.length
+      );
+    }
+  }
+
+  /* ---------------------------------------------
+     TREE MESSAGE
+  --------------------------------------------- */
+
+  function clickTree(tree) {
+    setSelectedTree(tree);
+
+    if (!guardianSpeaking) {
+      const messages = [
+        "The roots remember what the leaves forget.",
+        "Every tree here began as something small.",
+        "Growth is quiet. That is why people often miss it.",
+        "Stand still long enough and the forest will speak.",
+        "Your progress has roots now.",
+      ];
+
+      const message =
+        messages[tree.id % messages.length];
+
+      setStoryLines([message]);
+
+      speakGuardian(message);
+
+      window.setTimeout(() => {
+        setStoryLines([]);
+      }, 6500);
+    }
+  }
+
+  /* ---------------------------------------------
+     ATMOSPHERE
+  --------------------------------------------- */
+
+  const atmosphereInfo = {
+    dawn: {
+      title: "Dawn Forest",
+      subtitle:
+        "The forest is waking with you.",
+      icon: "🌅",
+    },
+
+    day: {
+      title: "Living Forest",
+      subtitle:
+        "Sunlight moves between the leaves.",
+      icon: "☀️",
+    },
+
+    dusk: {
+      title: "Twilight Forest",
+      subtitle:
+        "The forest grows quiet as evening arrives.",
+      icon: "🌇",
+    },
+
+    night: {
+      title: "Moonlit Forest",
+      subtitle:
+        "The trees are listening tonight.",
+      icon: "🌙",
+    },
+
+    rain: {
+      title: "Rain Forest",
+      subtitle:
+        "Let the rain wash the noise away.",
+      icon: "🌧️",
+    },
+
+    mystic: {
+      title: "Mystic Forest",
+      subtitle:
+        "Some paths are better left unexplained.",
+      icon: "🌌",
+    },
   };
 
-  const scrollWorld = (direction) => {
-    const world = document.getElementById("forest-world");
+  const currentAtmosphere =
+    atmosphereInfo[atmosphere] ||
+    atmosphereInfo.night;
 
-    if (!world) return;
+  /* ---------------------------------------------
+     NAV
+  --------------------------------------------- */
 
-    world.scrollBy({
-      left: direction * 900,
-      behavior: "smooth",
-    });
-  };
-
-  const openCave = () => {
-    setCaveOpen(true);
-    showToast("You entered the hidden cave...");
-  };
-
-  const openGarden = () => {
-    setGardenOpen(true);
-  };
-
-  /* =======================================================
-     SUN POSITION
-     ======================================================= */
-
-  const daylightStart = 5;
-  const daylightEnd = 20;
-
-  const daylightProgress = clamp(
-    ((hour + minute / 60 + second / 3600) - daylightStart) /
-      (daylightEnd - daylightStart),
-    0,
-    1
-  );
-
-  const sunAngle = daylightProgress * 180;
-
-  const sunStyle = {
-    "--sun-angle": `${sunAngle}deg`,
-    "--sun-progress": daylightProgress,
-  };
-
-  /* =======================================================
-     STARS
-     ======================================================= */
-
-  const stars = useMemo(
-    () =>
-      Array.from({ length: 80 }, (_, index) => ({
-        id: index,
-        left: `${(index * 37) % 100}%`,
-        top: `${(index * 53) % 65}%`,
-        delay: `${(index % 9) * 0.35}s`,
-        size: `${1 + (index % 3)}px`,
-      })),
-    []
-  );
-
-  /* =======================================================
-     FLOWERS
-     ======================================================= */
-
-  const flowers = useMemo(
-    () =>
-      Array.from({ length: 34 }, (_, index) => ({
-        id: index,
-        left: `${4 + ((index * 29) % 92)}%`,
-        bottom: `${6 + ((index * 17) % 34)}px`,
-        size: `${14 + (index % 4) * 3}px`,
-        delay: `${(index % 7) * 0.35}s`,
-        symbol: ["🌼", "🌸", "🌺", "🌷", "💮"][index % 5],
-      })),
-    []
-  );
-
-  /* =======================================================
-     RAIN
-     ======================================================= */
-
-  const rainDrops = useMemo(
-    () =>
-      Array.from({ length: 110 }, (_, index) => ({
-        id: index,
-        left: `${(index * 17) % 100}%`,
-        delay: `${(index % 25) * 0.07}s`,
-        duration: `${0.55 + (index % 7) * 0.08}s`,
-      })),
-    []
-  );
+  function go(path) {
+    navigate(path);
+  }
 
   return (
     <main
-      className={`forest-page season-${season.toLowerCase()} weather-${weather.toLowerCase()} phase-${getSkyClass(
-        phase
-      )}`}
+      className={`forest-page atmosphere-${atmosphere}`}
     >
-      {/* =====================================================
-          INTRO
-          ===================================================== */}
+      {/* BACKGROUND LAYERS */}
 
-      <section className="forest-intro">
-        <div className="intro-stars">
-          {stars.map((star) => (
+      <div className="forest-background">
+        <div className="forest-sky" />
+
+        <div className="forest-moon">
+          <span />
+        </div>
+
+        <div className="forest-stars">
+          {Array.from({ length: 35 }).map((_, i) => (
+            <i key={i} />
+          ))}
+        </div>
+
+        <div className="forest-cloud cloud-one" />
+        <div className="forest-cloud cloud-two" />
+
+        <div className="mountain mountain-back" />
+        <div className="mountain mountain-middle" />
+        <div className="mountain mountain-front" />
+
+        <div className="forest-mist mist-one" />
+        <div className="forest-mist mist-two" />
+      </div>
+
+      {/* RAIN */}
+
+      {atmosphere === "rain" && (
+        <div className="rain-layer">
+          {rainDrops.map((drop) => (
             <i
-              key={star.id}
+              key={drop.id}
               style={{
-                left: star.left,
-                top: star.top,
-                width: star.size,
-                height: star.size,
-                animationDelay: star.delay,
+                left: `${drop.left}%`,
+                animationDelay: `${drop.delay}s`,
+                animationDuration: `${drop.duration}s`,
               }}
             />
           ))}
         </div>
+      )}
 
-        <div className="intro-moon" />
+      {/* NAVIGATION */}
 
-        <div className="intro-mountains mountain-back" />
-        <div className="intro-mountains mountain-front" />
+      <header className="forest-nav">
+        <button
+          className="forest-brand"
+          onClick={() => go("/dashboard")}
+        >
+          <span className="brand-symbol">🌿</span>
 
-        <div className="intro-title">
-          <span className="intro-small">WELCOME TO</span>
-          <h1>GREEN PULSE</h1>
-          <p>A living digital forest powered by your green actions.</p>
+          <span>
+            <strong>GREEN PULSE</strong>
+            <small>THE LIVING FOREST</small>
+          </span>
+        </button>
 
-          <button className="enter-forest-button" onClick={enterForest}>
-            ENTER FOREST
-            <span>→</span>
+        <div className="forest-nav-right">
+          <div className="time-pill">
+            <span>{currentAtmosphere.icon}</span>
+            <span>{formatTime()}</span>
+          </div>
+
+          <button
+            className="nav-back"
+            onClick={() => go("/dashboard")}
+          >
+            ← Dashboard
           </button>
         </div>
+      </header>
 
-        <div className="intro-grass">
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
+      {/* INTRO */}
+
+      <section className="forest-intro">
+        <div>
+          <p className="eyebrow">
+            A QUIET PLACE BETWEEN THE TREES
+          </p>
+
+          <h1>
+            Welcome back to
+            <span> the Forest.</span>
+          </h1>
+
+          <p className="forest-intro-text">
+            {currentAtmosphere.subtitle}
+            <br />
+            Your choices outside this forest shape
+            what grows inside it.
+          </p>
+        </div>
+
+        <div className="level-card">
+          <div className="level-icon">
+            {level.icon}
+          </div>
+
+          <div className="level-copy">
+            <span>Your Forest Level</span>
+
+            <strong>{level.name}</strong>
+
+            <div className="level-progress">
+              <i
+                style={{
+                  width: `${levelProgress}%`,
+                }}
+              />
+            </div>
+
+            <small>
+              {nextLevel
+                ? `${Math.max(
+                    0,
+                    nextLevel.min - points
+                  )} points until ${nextLevel.name}`
+                : "The highest path has been reached."}
+            </small>
+          </div>
         </div>
       </section>
 
-      {/* =====================================================
-          FOREST WORLD
-          ===================================================== */}
+      {/* ATMOSPHERE CONTROLS */}
 
-      <section
-        id="forest-world"
-        className={`forest-world ${forestEntered ? "entered" : ""}`}
-      >
-        {/* SKY */}
-        <div className="forest-sky">
-          <div className="sky-stars">
-            {stars.map((star) => (
-              <i
-                key={`sky-${star.id}`}
-                style={{
-                  left: star.left,
-                  top: star.top,
-                  animationDelay: star.delay,
-                }}
-              />
-            ))}
+      <section className="forest-controls">
+        <div className="controls-label">
+          <span>🌲</span>
+          <div>
+            <strong>Change the atmosphere</strong>
+            <small>
+              System time is currently setting the
+              forest mood.
+            </small>
           </div>
-
-          <div className="sun-orbit">
-            <div className="sun" style={sunStyle}>
-              <span className="sun-ray ray-1" />
-              <span className="sun-ray ray-2" />
-              <span className="sun-ray ray-3" />
-              <span className="sun-ray ray-4" />
-              <span className="sun-ray ray-5" />
-              <span className="sun-ray ray-6" />
-            </div>
-          </div>
-
-          <div className="moon-world" />
-
-          <div className="cloud cloud-one" />
-          <div className="cloud cloud-two" />
-          <div className="cloud cloud-three" />
         </div>
 
-        {/* WEATHER */}
-        {rainEnabled && (
-          <div className="rain-layer">
-            {rainDrops.map((drop) => (
-              <span
-                key={drop.id}
-                style={{
-                  left: drop.left,
-                  animationDelay: drop.delay,
-                  animationDuration: drop.duration,
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {weather === "Snow" && (
-          <div className="snow-layer">
-            {Array.from({ length: 70 }, (_, index) => (
-              <span
-                key={index}
-                style={{
-                  left: `${(index * 23) % 100}%`,
-                  animationDelay: `${(index % 20) * 0.2}s`,
-                }}
-              >
-                ❄
-              </span>
-            ))}
-          </div>
-        )}
-
-        {weather === "Fog" && <div className="fog-layer" />}
-
-        {/* =================================================
-            SIDE MENU
-            ================================================= */}
-
-        <aside className={`forest-menu ${menuOpen ? "open" : "closed"}`}>
-          <button
-            className="menu-close"
-            onClick={() => setMenuOpen(false)}
-          >
-            ×
-          </button>
-
-          <div className="menu-brand">
-            <span>🌿</span>
-            <strong>GREEN PULSE</strong>
-          </div>
-
-          <div className="menu-clock">
-            <strong>
-              {now.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
-            </strong>
-            <small>{phase}</small>
-          </div>
-
-          <div className="menu-stat">
-            <span>🌱 Green Points</span>
-            <strong>{Math.floor(points)}</strong>
-          </div>
-
-          <div className="menu-stat">
-            <span>🌳 Garden</span>
-            <strong>{Math.floor(gardenGrowth)}%</strong>
-          </div>
-
-          <div className="menu-section">
-            <button onClick={openGarden}>🌷 My Garden</button>
-            <button onClick={() => setCampfire((value) => !value)}>
-              🔥 Campfire
-            </button>
-            <button onClick={openCave}>🪨 Explore Cave</button>
-          </div>
-
-          <div className="menu-section">
-            <label>Season</label>
-
-            <div className="season-buttons">
-              {SEASONS.map((item) => (
-                <button
-                  key={item}
-                  className={season === item ? "selected" : ""}
-                  onClick={() => setSeason(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="menu-section">
-            <label>Weather</label>
-
-            <div className="weather-buttons">
-              {WEATHER.map((item) => (
-                <button
-                  key={item}
-                  className={weather === item ? "selected" : ""}
-                  onClick={() => changeWeather(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            className={`sound-button ${soundEnabled ? "active" : ""}`}
-            onClick={toggleSound}
-          >
-            {soundEnabled ? "🔊 Forest Sound ON" : "🔇 Forest Sound OFF"}
-          </button>
-        </aside>
-
-        {!menuOpen && (
-          <button
-            className="menu-wall-button"
-            onClick={() => setMenuOpen(true)}
-          >
-            ☰
-          </button>
-        )}
-
-        {/* =================================================
-            NAV ARROWS
-            ================================================= */}
-
-        <button
-          className="world-arrow world-arrow-left"
-          onClick={() => scrollWorld(-1)}
-          aria-label="Scroll forest left"
-        >
-          ‹
-        </button>
-
-        <button
-          className="world-arrow world-arrow-right"
-          onClick={() => scrollWorld(1)}
-          aria-label="Scroll forest right"
-        >
-          ›
-        </button>
-
-        {/* =================================================
-            HORIZONTAL WORLD
-            ================================================= */}
-
-        <div className="forest-scroll">
-          <div className="forest-zone zone-1">
-            <div className="distant-trees">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-
-            <div className="forest-ground" />
-
-            <div className="bird bird-one">🕊️</div>
-            <div className="bird bird-two">🦜</div>
-            <div className="butterfly butterfly-one">🦋</div>
-            <div className="butterfly butterfly-two">🦋</div>
-
-            <div className="flower-field">
-              {flowers.map((flower) => (
-                <span
-                  key={flower.id}
-                  style={{
-                    "--flower-x": flower.left,
-                    "--flower-y": flower.bottom,
-                    "--flower-size": flower.size,
-                    "--flower-delay": flower.delay,
-                  }}
-                >
-                  {flower.symbol}
-                </span>
-              ))}
-            </div>
-
-            <div className="tree tree-large tree-a" />
-            <div className="tree tree-large tree-b" />
-            <div className="tree tree-medium tree-c" />
-
-            <div className="nest nest-one">🪺</div>
-
-            <CSSDeer
-              fed={animalFed.deer}
-              onFeed={() => feedAnimal("deer")}
-            />
-
-            <CSSRabbit onFeed={() => feedAnimal("rabbit")} />
-
-            <div className="zone-sign">
-              <span>ZONE 01</span>
-              <strong>MEADOW</strong>
-              <small>Feed the wildlife</small>
-            </div>
-          </div>
-
-          {/* =================================================
-              DOG AREA
-              ================================================= */}
-
-          <div className="forest-zone zone-2">
-            <div className="forest-ground" />
-
-            <div className="dog-area">
-              <div className="dog-shadow" />
-
-              <div className="dog-body">
-                <span className="dog-head">
-                  <span className="dog-ear dog-ear-left" />
-                  <span className="dog-ear dog-ear-right" />
-                  <span className="dog-eye" />
-                  <span className="dog-nose" />
-                </span>
-
-                <span className="dog-tail">〰</span>
-
-                <span className="dog-leg dog-leg-one" />
-                <span className="dog-leg dog-leg-two" />
-                <span className="dog-leg dog-leg-three" />
-                <span className="dog-leg dog-leg-four" />
-              </div>
-
-              <div className="dog-name">
-                <input
-                  value={dogName}
-                  maxLength={16}
-                  onChange={(event) => setDogName(event.target.value)}
-                  aria-label="Dog name"
-                />
-
-                <button onClick={feedDog}>
-                  {dogFed ? "Fed ✓" : "Feed"}
-                </button>
-              </div>
-            </div>
-
-            <div className="pond">
-              <span className="pond-ripple ripple-one" />
-              <span className="pond-ripple ripple-two" />
-              <span className="pond-ripple ripple-three" />
-            </div>
-
-            <div className="reeds">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-
-            <div className="zone-sign">
-              <span>ZONE 02</span>
-              <strong>WOODLAND</strong>
-              <small>Your companion lives here</small>
-            </div>
-          </div>
-
-          {/* =================================================
-              CAMEL AREA
-              ================================================= */}
-
-          <div className="forest-zone zone-3">
-            <div className="desert-ground" />
-
-            <div className="desert-rock rock-one" />
-            <div className="desert-rock rock-two" />
-            <div className="desert-rock rock-three" />
-
-            {/* CAMEL IS DIRECTLY INSIDE THE ZONE.
-                It is NOT tied to any scroll condition. */}
-            <CSSCamel onFeed={feedCamel} />
-
-            <div className="cactus cactus-one">
-              <span />
-              <span />
-            </div>
-
-            <div className="cactus cactus-two">
-              <span />
-              <span />
-            </div>
-
-            <div className="zone-sign">
-              <span>ZONE 03</span>
-              <strong>DRYLAND</strong>
-              <small>The camel never disappears</small>
-            </div>
-          </div>
-
-          {/* =================================================
-              LION AREA
-              ================================================= */}
-
-          <div className="forest-zone zone-4">
-            <div className="forest-ground" />
-
-            <div
-              className={`lion ${lionAwake ? "awake" : "sleeping"}`}
-              onClick={wakeLion}
-              role="button"
-              tabIndex={0}
+        <div className="mode-buttons">
+          {[
+            ["dawn", "🌅", "Dawn"],
+            ["day", "☀️", "Day"],
+            ["dusk", "🌇", "Dusk"],
+            ["night", "🌙", "Night"],
+            ["rain", "🌧️", "Rain"],
+            ["mystic", "🌌", "Mystic"],
+          ].map(([id, icon, label]) => (
+            <button
+              key={id}
+              className={
+                atmosphere === id
+                  ? "active"
+                  : ""
+              }
+              onClick={() => {
+                setManualMode(true);
+                setAtmosphere(id);
+              }}
             >
-              <span className="lion-mane" />
-              <span className="lion-face">
-                <span className="lion-eye left" />
-                <span className="lion-eye right" />
-                <span className="lion-muzzle" />
+              <span>{icon}</span>
+              {label}
+            </button>
+          ))}
+
+          {manualMode && (
+            <button
+              className="system-mode"
+              onClick={() => {
+                setManualMode(false);
+                setAtmosphere(
+                  getSystemAtmosphere()
+                );
+              }}
+            >
+              🕐 System
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* MAIN FOREST */}
+
+      <section className="forest-world">
+
+        {/* FIRELIGHT */}
+
+        <div
+          className={`firelight ${
+            firePulse ? "fire-pulse" : ""
+          }`}
+        />
+
+        {/* TREES */}
+
+        <div className="tree-field">
+          {trees.map((tree, index) => (
+            <ForestTree
+              key={tree.id}
+              {...tree}
+              delay={index * 0.12}
+              onClick={() => clickTree(tree)}
+            />
+          ))}
+        </div>
+
+        {/* DISTANT PATH */}
+
+        <div className="forest-path">
+          <span />
+        </div>
+
+        {/* CAVE */}
+
+        <button
+          className="forest-cave"
+          onClick={awakenGuardian}
+          aria-label="Enter the mysterious cave"
+        >
+          <div className="cave-rock cave-rock-one" />
+          <div className="cave-rock cave-rock-two" />
+          <div className="cave-rock cave-rock-three" />
+
+          <div className="cave-mouth">
+            <div className="cave-inner" />
+
+            <div className="cave-glow" />
+
+            <span className="cave-eyes-glow" />
+          </div>
+
+          <div className="cave-ground" />
+
+          <span className="cave-label">
+            THE OLD CAVE
+          </span>
+        </button>
+
+        {/* MAIN ANCIENT TREE */}
+
+        <div className="ancient-tree">
+          <div className="ancient-tree-aura" />
+
+          <div className="ancient-crown crown-a" />
+          <div className="ancient-crown crown-b" />
+          <div className="ancient-crown crown-c" />
+          <div className="ancient-crown crown-d" />
+
+          <div className="ancient-trunk">
+            <span />
+            <span />
+            <span />
+          </div>
+
+          <div className="root root-one" />
+          <div className="root root-two" />
+          <div className="root root-three" />
+          <div className="root root-four" />
+        </div>
+
+        {/* CAMPFIRE */}
+
+        <button
+          className={`campfire ${
+            campfireOpen ? "campfire-open" : ""
+          }`}
+          onClick={interactWithFire}
+          aria-label="Campfire"
+        >
+          <div className="fire-glow" />
+
+          <div className="fire">
+            <span className="flame flame-back" />
+            <span className="flame flame-main" />
+            <span className="flame flame-front" />
+          </div>
+
+          <div className="logs">
+            <span />
+            <span />
+          </div>
+
+          <small>
+            {campfireOpen
+              ? "THE FIRE REMEMBERS"
+              : "sit by the fire"}
+          </small>
+        </button>
+
+        {/* INVISIBLE GUARDIAN PRESENCE */}
+
+        <div
+          className={`guardian-presence ${
+            guardianSpeaking
+              ? "guardian-speaking"
+              : ""
+          }`}
+        >
+          <div className="presence-ring ring-one" />
+          <div className="presence-ring ring-two" />
+          <div className="presence-ring ring-three" />
+
+          <span className="guardian-whisper-dot" />
+        </div>
+
+        {/* TEMPORARY GUARDIAN DIALOGUE */}
+
+        {storyLines.length > 0 && (
+          <div className="guardian-dialogue">
+            <div className="dialogue-top">
+              <span className="voice-indicator">
+                {guardianSpeaking ? "◉" : "○"}
               </span>
 
-              <span className="lion-body" />
-              <span className="lion-tail" />
-
-              <span className="lion-leg l1" />
-              <span className="lion-leg l2" />
-              <span className="lion-leg l3" />
-              <span className="lion-leg l4" />
-
-              {!lionAwake && (
-                <span className="sleep-z">
-                  Z
-                  <small>Z</small>
-                  <b>Z</b>
-                </span>
-              )}
-            </div>
-
-            <div className="owl">🦉</div>
-
-            <div className="tree tree-large lion-tree" />
-
-            <div className="zone-sign">
-              <span>ZONE 04</span>
-              <strong>WILD GROVE</strong>
-              <small>Click the sleeping lion</small>
-            </div>
-          </div>
-
-          {/* =================================================
-              CAVE
-              ================================================= */}
-
-          <div className="forest-zone zone-5">
-            <div className="cave-mountain">
-              <div className="cave-opening">
-                <div className="cave-person">
-                  <span className="explorer-head" />
-                  <span className="explorer-body" />
-                  <span className="explorer-arm" />
-                  <span className="explorer-lamp">
-                    <i />
-                  </span>
-                </div>
-
-                <div className="crystal crystal-a">◆</div>
-                <div className="crystal crystal-b">◆</div>
-                <div className="crystal crystal-c">◆</div>
-
-                <div className="cave-bat">🦇</div>
-
-                <button
-                  className="cave-enter-button"
-                  onClick={openCave}
-                >
-                  ENTER CAVE
-                </button>
-              </div>
-            </div>
-
-            <div className="cave-vines">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-
-            <div className="zone-sign">
-              <span>ZONE 05</span>
-              <strong>HIDDEN CAVE</strong>
-              <small>Someone is exploring inside...</small>
-            </div>
-          </div>
-
-          {/* =================================================
-              CAMPFIRE
-              ================================================= */}
-
-          <div className="forest-zone zone-6">
-            <div className="night-clearing" />
-
-            <div className="campfire-area">
-              <div className="fire-glow" />
-
-              <div className={`campfire ${campfire ? "lit" : ""}`}>
-                <div className="logs">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-
-                {campfire && (
-                  <>
-                    <div className="flame flame-back" />
-                    <div className="flame flame-middle" />
-                    <div className="flame flame-front" />
-
-                    <div className="ember ember-one">•</div>
-                    <div className="ember ember-two">•</div>
-                    <div className="ember ember-three">•</div>
-                    <div className="ember ember-four">•</div>
-
-                    <div className="smoke smoke-one" />
-                    <div className="smoke smoke-two" />
-                  </>
-                )}
-              </div>
+              <span>
+                THE GUARDIAN
+              </span>
 
               <button
-                className="campfire-button"
-                onClick={() => {
-                  setCampfire((value) => !value);
-                  addPoints(1, "Campfire moment");
-                }}
+                onClick={stopGuardian}
+                aria-label="Close Guardian dialogue"
               >
-                {campfire ? "EXTINGUISH FIRE" : "LIGHT CAMPFIRE"}
+                ×
               </button>
             </div>
 
-            <div className="fireflies">
-              {Array.from({ length: 20 }, (_, index) => (
-                <span
-                  key={index}
-                  style={{
-                    left: `${(index * 31) % 92}%`,
-                    top: `${15 + ((index * 19) % 70)}%`,
-                    animationDelay: `${(index % 9) * 0.4}s`,
-                  }}
-                />
+            <div className="dialogue-lines">
+              {storyLines.map((line, index) => (
+                <p key={index}>{line}</p>
               ))}
             </div>
 
-            <div className="zone-sign">
-              <span>ZONE 06</span>
-              <strong>NIGHT CLEARING</strong>
-              <small>Stay a while</small>
+            <div className="dialogue-bottom">
+              <span>
+                {guardianSpeaking
+                  ? "A voice moves through the trees..."
+                  : "The forest has gone quiet."}
+              </span>
+
+              <button onClick={nextStory}>
+                Continue →
+              </button>
             </div>
+          </div>
+        )}
+
+        {/* STORY CONTROLS */}
+
+        <div className="story-console">
+          <div className="story-console-title">
+            <span>◌</span>
+
+            <div>
+              <strong>
+                The Guardian's Story
+              </strong>
+
+              <small>
+                You will never see him.
+              </small>
+            </div>
+          </div>
+
+          <div className="story-buttons">
+            <button onClick={previousStory}>
+              ←
+            </button>
+
+            <button
+              className="story-main-button"
+              onClick={awakenGuardian}
+            >
+              {guardianSpeaking
+                ? "Listen..."
+                : "Listen to the forest"}
+            </button>
+
+            <button onClick={nextStory}>
+              →
+            </button>
           </div>
         </div>
 
-        {/* =================================================
-            BOTTOM INFO
-            ================================================= */}
+        {/* SOUND CONTROLS */}
 
-        <div className="forest-bottom-bar">
+        <div className="sound-console">
+          <button
+            className={ambientOn ? "on" : ""}
+            onClick={() =>
+              setAmbientOn((value) => !value)
+            }
+          >
+            {ambientOn ? "🌬️" : "🔇"} Forest
+          </button>
+
+          <button
+            className={fireOn ? "on" : ""}
+            onClick={() =>
+              setFireOn((value) => !value)
+            }
+          >
+            {fireOn ? "🔥" : "○"} Fire
+          </button>
+
+          <button
+            className={voiceEnabled ? "on" : ""}
+            onClick={() =>
+              setVoiceEnabled((value) => !value)
+            }
+          >
+            {voiceEnabled ? "🗣️" : "🔇"} Voice
+          </button>
+        </div>
+
+      </section>
+
+      {/* SELECTED TREE MESSAGE */}
+
+      {selectedTree && (
+        <div className="tree-message">
+          <span>🌿</span>
+
           <div>
-            <strong>{phase}</strong>
-            <span>
-              {now.toLocaleDateString([], {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
-            </span>
+            <strong>
+              A tree noticed you.
+            </strong>
+
+            <p>
+              The forest has grown to{" "}
+              <b>{treeCount} living trees</b>.
+              Every small action gives it another
+              reason to grow.
+            </p>
           </div>
 
-          <div className="bottom-hint">
-            ← → Explore the forest
+          <button
+            onClick={() => setSelectedTree(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* FOREST STATS */}
+
+      <section className="forest-stats">
+        <article>
+          <span className="stat-icon">🌳</span>
+          <div>
+            <small>Living Trees</small>
+            <strong>{treeCount}</strong>
           </div>
+        </article>
+
+        <article>
+          <span className="stat-icon">🔥</span>
+          <div>
+            <small>Green Points</small>
+            <strong>{points}</strong>
+          </div>
+        </article>
+
+        <article>
+          <span className="stat-icon">📅</span>
+          <div>
+            <small>Days Recorded</small>
+            <strong>{completedDays}</strong>
+          </div>
+        </article>
+
+        <article>
+          <span className="stat-icon">⚡</span>
+          <div>
+            <small>Current Streak</small>
+            <strong>{streak} days</strong>
+          </div>
+        </article>
+
+        <article>
+          <span className="stat-icon">🌍</span>
+          <div>
+            <small>Tracked CO₂e</small>
+            <strong>
+              {totalCO2.toFixed(2)} kg
+            </strong>
+          </div>
+        </article>
+      </section>
+
+      {/* BOTTOM ACTIONS */}
+
+      <section className="forest-actions">
+
+        <div className="forest-action-card primary">
+          <div className="action-icon">🧮</div>
 
           <div>
-            <strong>{Math.floor(points)}</strong>
-            <span>Green Points</span>
+            <small>KEEP GROWING</small>
+
+            <h2>
+              Add today's footprint
+            </h2>
+
+            <p>
+              Every calculation gives your forest
+              another chance to grow.
+            </p>
           </div>
+
+          <button
+            onClick={() => go("/calculator")}
+          >
+            Open Calculator →
+          </button>
+        </div>
+
+        <div className="forest-action-grid">
+
+          <button
+            className="forest-action-small"
+            onClick={() => go("/focus")}
+          >
+            <span>🌲</span>
+
+            <div>
+              <strong>
+                Forest Focus
+              </strong>
+
+              <small>
+                Study inside the forest.
+              </small>
+            </div>
+
+            <b>→</b>
+          </button>
+
+          <button
+            className="forest-action-small"
+            onClick={() => go("/challenges")}
+          >
+            <span>🏆</span>
+
+            <div>
+              <strong>
+                Forest Challenges
+              </strong>
+
+              <small>
+                Give your forest new roots.
+              </small>
+            </div>
+
+            <b>→</b>
+          </button>
+
+          <button
+            className="forest-action-small"
+            onClick={() => go("/rewards")}
+          >
+            <span>🌱</span>
+
+            <div>
+              <strong>
+                Your Growth
+              </strong>
+
+              <small>
+                See your badges and milestones.
+              </small>
+            </div>
+
+            <b>→</b>
+          </button>
+
+          <button
+            className="forest-action-small"
+            onClick={() => go("/feedback")}
+          >
+            <span>💬</span>
+
+            <div>
+              <strong>
+                Speak to GreenPulse
+              </strong>
+
+              <small>
+                Tell us how the forest feels.
+              </small>
+            </div>
+
+            <b>→</b>
+          </button>
+
         </div>
       </section>
 
-      {/* =====================================================
-          CAVE OVERLAY
-          ===================================================== */}
+      {/* STORY FOOTER */}
 
-      {caveOpen && (
-        <div className="overlay cave-overlay">
-          <div className="cave-modal">
-            <button
-              className="overlay-close"
-              onClick={() => setCaveOpen(false)}
-            >
-              ×
-            </button>
+      <section className="forest-ending">
 
-            <div className="cave-modal-art">
-              <div className="modal-explorer">
-                🧑‍🚀
-              </div>
+        <div className="ending-line" />
 
-              <div className="modal-crystal">💎</div>
-              <div className="modal-bat">🦇</div>
-            </div>
+        <p>
+          “You do not need to find the Guardian.”
+        </p>
 
-            <span className="modal-kicker">HIDDEN DISCOVERY</span>
-            <h2>The Forest Cave</h2>
+        <span>
+          “If you are quiet enough, you may already
+          be hearing him.”
+        </span>
 
-            <p>
-              A small explorer has reached the deepest chamber.
-              Crystal formations glow against the rock while bats
-              circle above.
-            </p>
+        <button onClick={awakenGuardian}>
+          Listen again
+        </button>
 
-            <button
-              className="primary-modal-button"
-              onClick={() => {
-                addPoints(10, "Cave discovered");
-                setCaveOpen(false);
-              }}
-            >
-              COLLECT DISCOVERY +10
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================
-          GARDEN OVERLAY
-          ===================================================== */}
-
-      {gardenOpen && (
-        <div className="overlay garden-overlay">
-          <div className="garden-modal">
-            <button
-              className="overlay-close"
-              onClick={() => setGardenOpen(false)}
-            >
-              ×
-            </button>
-
-            <span className="modal-kicker">YOUR LIVING SPACE</span>
-            <h2>My Garden</h2>
-
-            <div
-              className="garden-progress"
-              style={{
-                "--growth": `${gardenGrowth}%`,
-              }}
-            >
-              <div className="garden-sky" />
-
-              <div className="garden-soil" />
-
-              <div className="garden-plants">
-                {Array.from(
-                  {
-                    length: Math.max(
-                      5,
-                      Math.floor(gardenGrowth / 8)
-                    ),
-                  },
-                  (_, index) => (
-                    <span
-                      key={index}
-                      className="garden-flower"
-                      style={{
-                        left: `${7 + ((index * 17) % 88)}%`,
-                        animationDelay: `${index * 0.15}s`,
-                      }}
-                    >
-                      {["🌷", "🌼", "🌸", "🌺", "🌻"][index % 5]}
-                    </span>
-                  )
-                )}
-              </div>
-            </div>
-
-            <p>
-              Your garden grows as your Green Points increase.
-            </p>
-
-            <strong>{Math.floor(gardenGrowth)}% grown</strong>
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================
-          TOAST
-          ===================================================== */}
-
-      {toast && <div className="forest-toast">{toast}</div>}
-
-      {/* =====================================================
-          FOOTER BRANDING
-          ===================================================== */}
+      </section>
 
       <footer className="forest-footer">
-        <span>GREEN PULSE CSEAIML</span>
-        <small>Digital Green Challenge 2026</small>
+        <span>
+          GREEN PULSE CSEAIML
+        </span>
+
+        <span>
+          Digital Green Challenge 2026
+        </span>
+
+        <button onClick={() => go("/dashboard")}>
+          Dashboard
+        </button>
       </footer>
     </main>
   );

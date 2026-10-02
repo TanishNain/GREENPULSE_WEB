@@ -1,804 +1,865 @@
-import { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./Dashboard.css";
-import { Link, useNavigate } from "react-router-dom";
-import { getToken, getUser, logout } from "./auth.js";
 
-const API_URL =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1"
-    ? "http://127.0.0.1:8000"
-    : "https://greenpulse-web-tc0g.onrender.com";
+const API_BASE = "https://greenpulse-web-tc0g.onrender.com";
 
-const CHALLENGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const FOREST_IMAGE =
+  "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1400&q=85";
 
-function getUnlockTime(challenge) {
-  if (!challenge?.completed) {
-    return null;
-  }
+const LEAF_IMAGE =
+  "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=900&q=85";
 
-  const completedAt =
-    challenge?.completion?.completed_at ||
-    challenge?.completed_at ||
-    null;
+const levelData = [
+  { min: 0, name: "Eco Starter", icon: "🌱" },
+  { min: 100, name: "Green Explorer", icon: "🌿" },
+  { min: 250, name: "Eco Learner", icon: "🍃" },
+  { min: 500, name: "Climate Champion", icon: "🌎" },
+  { min: 1000, name: "Planet Protector", icon: "🛡️" },
+  { min: 2000, name: "Green Leader", icon: "👑" },
+  { min: 5000, name: "Earth Guardian", icon: "🌳" },
+];
 
-  if (!completedAt) {
-    return null;
-  }
-
-  const completedTime = new Date(completedAt).getTime();
-
-  if (Number.isNaN(completedTime)) {
-    return null;
-  }
-
-  return completedTime + CHALLENGE_COOLDOWN_MS;
+function number(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function formatCountdown(milliseconds) {
-  if (milliseconds <= 0) {
-    return "00:00:00";
-  }
+function getLevel(points) {
+  let current = levelData[0];
 
-  const totalSeconds = Math.ceil(milliseconds / 1000);
-
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return [
-    String(hours).padStart(2, "0"),
-    String(minutes).padStart(2, "0"),
-    String(seconds).padStart(2, "0"),
-  ].join(":");
-}
-
-function Dashboard() {
-  const navigate = useNavigate();
-  const user = getUser();
-
-  const [stats, setStats] = useState({
-    points: 0,
-    streak: 0,
-    level: 1,
-    forest_actions: 0,
-  });
-
-  const [challenge, setChallenge] = useState(null);
-  const [challengeLoading, setChallengeLoading] = useState(true);
-  const [challengeCompleting, setChallengeCompleting] = useState(false);
-  const [challengeError, setChallengeError] = useState("");
-  const [challengeMessage, setChallengeMessage] = useState("");
-  const [unlockTime, setUnlockTime] = useState(null);
-  const [countdown, setCountdown] = useState("");
-
-  // --------------------------------------------------
-  // LOAD DASHBOARD STATS
-  // --------------------------------------------------
-
-  const loadDashboard = async (token) => {
-    const response = await fetch(
-      `${API_URL}/api/dashboard?token=${encodeURIComponent(token)}`
-    );
-
-    if (!response.ok) {
-      throw new Error("Failed to load dashboard");
+  for (const level of levelData) {
+    if (points >= level.min) {
+      current = level;
     }
+  }
 
-    const data = await response.json();
+  return current;
+}
 
-    setStats(data);
-  };
+function getNextLevel(points) {
+  for (const level of levelData) {
+    if (level.min > points) {
+      return level;
+    }
+  }
 
-  // --------------------------------------------------
-  // LOAD TODAY'S CHALLENGE
-  // --------------------------------------------------
+  return null;
+}
 
-  const loadChallenge = async (token) => {
-    setChallengeLoading(true);
-    setChallengeError("");
+function StatCard({
+  icon,
+  title,
+  value,
+  unit,
+  description,
+  accent = "green",
+  onClick,
+}) {
+  return (
+    <button
+      className={`dash-stat-card ${accent}`}
+      onClick={onClick}
+      type="button"
+    >
+      <div className="dash-stat-top">
+        <span className="dash-stat-icon">{icon}</span>
+        <span className="dash-stat-arrow">↗</span>
+      </div>
+
+      <div className="dash-stat-title">{title}</div>
+
+      <div className="dash-stat-value">
+        {value}
+        {unit && <small>{unit}</small>}
+      </div>
+
+      <div className="dash-stat-description">{description}</div>
+    </button>
+  );
+}
+
+function QuickAction({ icon, title, text, onClick }) {
+  return (
+    <button className="dash-quick-action" onClick={onClick} type="button">
+      <span className="dash-action-icon">{icon}</span>
+
+      <span className="dash-action-copy">
+        <strong>{title}</strong>
+        <small>{text}</small>
+      </span>
+
+      <span className="dash-action-arrow">→</span>
+    </button>
+  );
+}
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+
+  const [dashboard, setDashboard] = useState(null);
+  const [user, setUser] = useState(null);
+  const [activePeriod, setActivePeriod] = useState("30D");
+  const [now, setNow] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const token = localStorage.getItem("greenpulse_token");
+
+  const loadDashboard = useCallback(async () => {
+    if (!token) {
+      navigate("/auth");
+      return;
+    }
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/challenges/today?token=${encodeURIComponent(token)}`
-      );
+      setError("");
 
-      if (response.status === 401) {
-        logout();
+      const [dashboardResponse, meResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/dashboard?token=${encodeURIComponent(token)}`),
+        fetch(`${API_BASE}/api/me?token=${encodeURIComponent(token)}`),
+      ]);
+
+      if (dashboardResponse.status === 401 || meResponse.status === 401) {
+        localStorage.removeItem("greenpulse_token");
+        localStorage.removeItem("greenpulse_user");
+        navigate("/auth");
         return;
       }
 
-      if (!response.ok) {
-        throw new Error("Failed to load today's challenge");
+      if (!dashboardResponse.ok) {
+        throw new Error("Could not load your dashboard.");
       }
 
-      const data = await response.json();
+      const dashboardData = await dashboardResponse.json();
 
-      setChallenge(data);
+      let meData = null;
 
-      const nextUnlockTime = getUnlockTime(data);
+      if (meResponse.ok) {
+        meData = await meResponse.json();
+      }
 
-      setUnlockTime(nextUnlockTime);
-    } catch (error) {
-      console.error("Challenge error:", error);
-
-      setChallengeError(
-        "We couldn't load today's challenge. Please try again."
-      );
+      setDashboard(dashboardData);
+      setUser(meData);
+      setNow(new Date());
+    } catch (err) {
+      setError(err.message || "Unable to connect to GreenPulse.");
     } finally {
-      setChallengeLoading(false);
+      setLoading(false);
     }
-  };
-
-  // --------------------------------------------------
-  // INITIAL DASHBOARD LOAD
-  // --------------------------------------------------
+  }, [navigate, token]);
 
   useEffect(() => {
-    const token = getToken();
+    loadDashboard();
 
-    if (!token) {
-      logout();
-      return;
-    }
-
-    Promise.all([
-      loadDashboard(token),
-      loadChallenge(token),
-    ]).catch((error) => {
-      console.error("Dashboard error:", error);
-    });
-  }, []);
-
-  // --------------------------------------------------
-  // 24-HOUR COUNTDOWN
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (!unlockTime) {
-      setCountdown("");
-      return;
-    }
-
-    const updateCountdown = () => {
-      const remaining = unlockTime - Date.now();
-
-      if (remaining <= 0) {
-        setCountdown("00:00:00");
-
-        const token = getToken();
-
-        if (token) {
-          loadChallenge(token);
-        }
-
-        return;
-      }
-
-      setCountdown(formatCountdown(remaining));
+    const refresh = () => {
+      loadDashboard();
+      setNow(new Date());
     };
 
-    updateCountdown();
-
-    const interval = window.setInterval(
-      updateCountdown,
-      1000
-    );
+    window.addEventListener("focus", refresh);
+    window.addEventListener("greenpulse:data-updated", refresh);
 
     return () => {
-      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("greenpulse:data-updated", refresh);
     };
-  }, [unlockTime]);
+  }, [loadDashboard]);
 
-  // --------------------------------------------------
-  // BACK BUTTON
-  // --------------------------------------------------
+  const stats = useMemo(() => {
+    const data = dashboard || {};
 
-  const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate("/");
-    }
-  };
+    return {
+      points: number(data.points),
+      streak: number(data.streak),
+      level: number(data.level, 1),
+      forestActions: number(data.forest_actions),
+      completedDays: number(data.completed_days),
+      calculations: number(data.total_calculations),
+      totalCO2: number(data.total_co2e),
+      savedCO2: number(data.total_saved_co2e),
+    };
+  }, [dashboard]);
 
-  // --------------------------------------------------
-  // COMPLETE DAILY CHALLENGE
-  // --------------------------------------------------
+  const username =
+    user?.username ||
+    user?.name ||
+    JSON.parse(localStorage.getItem("greenpulse_user") || "null")?.username ||
+    "Green Explorer";
 
-  const handleCompleteChallenge = async () => {
-    const token = getToken();
+  const level = getLevel(stats.points);
+  const nextLevel = getNextLevel(stats.points);
 
-    if (
-      !token ||
-      !challenge?.challenge?.id ||
-      challenge.completed ||
-      challengeCompleting ||
-      (unlockTime && unlockTime > Date.now())
-    ) {
-      return;
-    }
+  const levelProgress = nextLevel
+    ? Math.min(
+        100,
+        Math.max(
+          0,
+          ((stats.points - level.min) /
+            (nextLevel.min - level.min)) *
+            100
+        )
+      )
+    : 100;
 
-    setChallengeCompleting(true);
-    setChallengeError("");
-    setChallengeMessage("");
+  const trees = Math.max(
+    0,
+    Math.floor(stats.forestActions / 5)
+  );
 
-    try {
-      const response = await fetch(
-        `${API_URL}/api/challenges/complete`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            token,
-            challenge_id: challenge.challenge.id,
-          }),
-        }
-      );
+  const footprintScore = Math.min(
+    100,
+    Math.round((Math.min(stats.completedDays, 30) / 30) * 100)
+  );
 
-      const data = await response.json();
+  const greeting =
+    now.getHours() < 12
+      ? "Good morning"
+      : now.getHours() < 18
+      ? "Good afternoon"
+      : "Good evening";
 
-      if (response.status === 401) {
-        logout();
-        return;
-      }
+  const chartValues =
+    activePeriod === "7D"
+      ? [28, 42, 35, 57, 48, 69, 82]
+      : activePeriod === "1Y"
+      ? [32, 38, 45, 42, 54, 61, 72, 67, 78, 71, 85, 91]
+      : [32, 45, 39, 57, 51, 68, 61, 79, 73, 88];
 
-      // ------------------------------------------------
-      // ALREADY COMPLETED
-      // ------------------------------------------------
+  if (loading) {
+    return (
+      <div className="dashboard-page dash-loading-screen">
+        <div className="dash-loader">
+          <div>🌱</div>
+          <strong>Growing your dashboard...</strong>
+          <span>Syncing with GreenPulse</span>
+        </div>
+      </div>
+    );
+  }
 
-      if (!response.ok) {
-        if (response.status === 409) {
-          const completedAt =
-            data?.completion?.completed_at ||
-            new Date().toISOString();
+  if (error) {
+    return (
+      <div className="dashboard-page dash-loading-screen">
+        <div className="dash-loader dash-error-state">
+          <div>🌧️</div>
+          <strong>Dashboard unavailable</strong>
+          <span>{error}</span>
 
-          const nextUnlock =
-            new Date(completedAt).getTime() +
-            CHALLENGE_COOLDOWN_MS;
-
-          setChallenge((current) => {
-            if (!current) {
-              return current;
-            }
-
-            return {
-              ...current,
-              completed: true,
-              completion: {
-                ...(current.completion || {}),
-                completed_at: completedAt,
-              },
-            };
-          });
-
-          setUnlockTime(nextUnlock);
-
-          setChallengeMessage(
-            "Today's challenge has already been completed."
-          );
-
-          await loadDashboard(token);
-
-          return;
-        }
-
-        throw new Error(
-          data?.detail || "Unable to complete challenge"
-        );
-      }
-
-      // ------------------------------------------------
-      // SUCCESS
-      // ------------------------------------------------
-
-      const completedAt =
-        data?.completion?.completed_at ||
-        new Date().toISOString();
-
-      const nextUnlock =
-        new Date(completedAt).getTime() +
-        CHALLENGE_COOLDOWN_MS;
-
-      setChallenge((current) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          completed: true,
-          completion: {
-            completed_at: completedAt,
-            points: data.progress.points,
-          },
-        };
-      });
-
-      setUnlockTime(nextUnlock);
-
-      setStats((current) => ({
-        ...current,
-        points: data.progress.points,
-        streak: data.progress.streak,
-        level: data.progress.level,
-        forest_actions: data.progress.forest_actions,
-      }));
-
-      setChallengeMessage(
-        `Challenge completed! +${data.challenge.points} points 🌱`
-      );
-    } catch (error) {
-      console.error("Challenge completion error:", error);
-
-      setChallengeError(
-        error.message ||
-          "Something went wrong while completing the challenge."
-      );
-    } finally {
-      setChallengeCompleting(false);
-    }
-  };
-
-  const challengeLocked =
-    Boolean(unlockTime) &&
-    unlockTime > Date.now();
-
-  // --------------------------------------------------
-  // PAGE
-  // --------------------------------------------------
+          <button type="button" onClick={loadDashboard}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <main className="dashboard-page">
+    <div className="dashboard-page">
+      <div className="dash-background-glow dash-glow-one" />
+      <div className="dash-background-glow dash-glow-two" />
 
-      {/* TOP BAR */}
-      <header className="dashboard-topbar">
-
-        <button
-          type="button"
-          onClick={handleBack}
-          className="dashboard-back-button"
-          aria-label="Go back to the previous page"
-        >
-          ← Back to Home
-        </button>
-
-        <Link to="/" className="dashboard-brand">
-          <span>🌱</span>
+      <header className="dash-topbar">
+        <div className="dash-mobile-brand">
+          <span>🌿</span>
           GREEN<span>PULSE</span>
-        </Link>
+        </div>
 
-        <div className="dashboard-account">
+        <div className="dash-search">
+          <span>⌕</span>
+          <input
+            type="text"
+            placeholder="Search GreenPulse..."
+            aria-label="Search"
+          />
+        </div>
 
-          <span>
-            🌱 {user?.username || "User"}
-          </span>
-
-          {user?.role === "admin" && (
-            <span className="dashboard-admin">
-              ADMIN
-            </span>
-          )}
-
+        <div className="dash-top-actions">
           <button
+            className="dash-icon-button"
             type="button"
-            onClick={logout}
+            title="Notifications"
           >
-            Log out
+            🔔
+            <i />
           </button>
 
+          <button
+            className="dash-profile"
+            type="button"
+            onClick={() => navigate("/settings")}
+          >
+            <span className="dash-profile-avatar">🌱</span>
+
+            <span className="dash-profile-info">
+              <strong>{username}</strong>
+              <small>{level.name}</small>
+            </span>
+
+            <span>⌄</span>
+          </button>
         </div>
       </header>
 
-      {/* HERO */}
-      <section className="dashboard-hero">
-
-        <div>
-
-          <span className="dashboard-eyebrow">
-            YOUR GREENPULSE
-          </span>
-
-          <h1>
-            Welcome back,
-            <br />
-            <span>
-              {user?.username || "Explorer"}.
-            </span>
-          </h1>
-
-          <p>
-            Your everyday actions become measurable impact.
-            Keep going and build your streak.
-          </p>
-
-        </div>
-
-        <div className="dashboard-impact">
-
-          <span>
-            YOUR IMPACT
-          </span>
-
-          <strong>
-            {stats.points}
-          </strong>
-
-          <small>
-            points
-          </small>
-
-        </div>
-
-      </section>
-
-      {/* STATS */}
-      <section className="dashboard-stats">
-
-        <article>
-          <span>🔥 STREAK</span>
-          <strong>{stats.streak}</strong>
-          <small>days</small>
-        </article>
-
-        <article>
-          <span>⭐ POINTS</span>
-          <strong>{stats.points}</strong>
-          <small>earned</small>
-        </article>
-
-        <article>
-          <span>🌱 LEVEL</span>
-          <strong>{stats.level}</strong>
-          <small>Growing</small>
-        </article>
-
-        <article>
-          <span>🌳 FOREST</span>
-          <strong>{stats.forest_actions}</strong>
-          <small>actions</small>
-        </article>
-
-      </section>
-
-      {/* DAILY CHALLENGE */}
-      <section className="dashboard-challenge-section">
-
-        <div className="dashboard-section-heading">
-
-          <span>DAILY CHALLENGE</span>
-
-          <h2>
-            One action. Every day.
-          </h2>
-
-        </div>
-
-        {/* LOADING */}
-        {challengeLoading && (
-          <article className="dashboard-challenge-card dashboard-challenge-loading">
-
-            <div className="challenge-loading-icon">
-              🌱
+      <main className="dash-content">
+        <section className="dash-hero">
+          <div className="dash-hero-copy">
+            <div className="dash-eyebrow">
+              WELCOME BACK <span>🌿</span>
             </div>
 
-            <div>
-              <span className="challenge-loading-line"></span>
-              <span className="challenge-loading-line short"></span>
-              <span className="challenge-loading-line"></span>
+            <h1>
+              {greeting}, <span>{username}</span>.
+            </h1>
+
+            <p>
+              Your actions today create a greener tomorrow.
+              <br />
+              Keep growing your impact.
+            </p>
+
+            <div className="dash-hero-level">
+              <div className="dash-level-icon">{level.icon}</div>
+
+              <div className="dash-level-copy">
+                <strong>{level.name}</strong>
+                <span>{stats.points.toLocaleString()} eco points</span>
+              </div>
+
+              <div className="dash-level-progress">
+                <div>
+                  <span style={{ width: `${levelProgress}%` }} />
+                </div>
+
+                <small>
+                  {nextLevel
+                    ? `${Math.max(
+                        0,
+                        nextLevel.min - stats.points
+                      )} points to ${nextLevel.name}`
+                    : "Maximum level reached"}
+                </small>
+              </div>
             </div>
+          </div>
 
-          </article>
-        )}
-
-        {/* ERROR */}
-        {!challengeLoading && challengeError && (
-          <article className="dashboard-challenge-card dashboard-challenge-error">
-
-            <div className="challenge-icon">
-              ⚠️
-            </div>
-
-            <div className="challenge-content">
-
-              <span className="challenge-label">
-                SOMETHING WENT WRONG
+          <div
+            className="dash-forest-card"
+            style={{
+              backgroundImage: `linear-gradient(90deg, rgba(1,23,16,.92), rgba(1,23,16,.22)), url("${FOREST_IMAGE}")`,
+            }}
+          >
+            <div className="dash-forest-card-content">
+              <span className="dash-mini-label">
+                YOUR GREEN JOURNEY
               </span>
 
-              <h3>
-                Challenge unavailable
-              </h3>
+              <h2>
+                Grow your forest.
+                <br />
+                Protect your future.
+              </h2>
 
               <p>
-                {challengeError}
+                Every sustainable action gives your
+                virtual forest more life.
               </p>
 
               <button
                 type="button"
-                className="challenge-action-button"
-                onClick={() => {
-                  const token = getToken();
-
-                  if (token) {
-                    loadChallenge(token);
-                  }
-                }}
+                onClick={() => navigate("/forest")}
               >
-                Try again
+                Enter My Forest <span>→</span>
               </button>
-
             </div>
 
-          </article>
-        )}
+            <div className="dash-forest-orb">🌳</div>
+          </div>
+        </section>
 
-        {/* CHALLENGE */}
-        {!challengeLoading &&
-          !challengeError &&
-          challenge?.challenge && (
+        <section className="dash-stat-grid">
+          <StatCard
+            icon="🍃"
+            title="Carbon Saved"
+            value={stats.savedCO2.toFixed(1)}
+            unit="kg"
+            description="CO₂e saved through your actions"
+            onClick={() => navigate("/progress")}
+          />
 
-            <article
-              className={`dashboard-challenge-card ${
-                challenge.completed
-                  ? "challenge-completed"
-                  : ""
-              } ${
-                challengeLocked
-                  ? "challenge-locked"
-                  : ""
-              }`}
-            >
+          <StatCard
+            icon="🌳"
+            title="Trees Grown"
+            value={trees}
+            description="Virtual trees in your journey"
+            accent="tree"
+            onClick={() => navigate("/forest")}
+          />
 
-              <div className="challenge-icon-wrap">
+          <StatCard
+            icon="⭐"
+            title="Points Earned"
+            value={stats.points.toLocaleString()}
+            description="Lifetime GreenPulse points"
+            accent="gold"
+            onClick={() => navigate("/rewards")}
+          />
 
-                <span className="challenge-icon">
-                  {challengeLocked
-                    ? "🔒"
-                    : challenge.challenge.icon}
-                </span>
+          <StatCard
+            icon="🔥"
+            title="Green Streak"
+            value={stats.streak}
+            unit="days"
+            description="Consecutive eco days"
+            accent="fire"
+            onClick={() => navigate("/challenges")}
+          />
+        </section>
 
+        <section className="dash-main-grid">
+          <article className="dash-panel dash-carbon-panel">
+            <div className="dash-panel-header">
+              <div>
+                <span className="dash-section-kicker">IMPACT</span>
+                <h2>Your Carbon Footprint</h2>
               </div>
 
-              <div className="challenge-content">
-
-                <div className="challenge-meta">
-
-                  <span
+              <div className="dash-periods">
+                {["7D", "30D", "1Y"].map((period) => (
+                  <button
+                    key={period}
+                    type="button"
                     className={
-                      challengeLocked
-                        ? "challenge-lock-label"
-                        : "challenge-label"
+                      activePeriod === period ? "active" : ""
                     }
+                    onClick={() => setActivePeriod(period)}
                   >
-                    {challengeLocked
-                      ? "NEXT CHALLENGE LOCKED"
-                      : challenge.challenge.category}
-                  </span>
+                    {period}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  {!challengeLocked && (
-                    <span className="challenge-points">
-                      +{challenge.challenge.points} POINTS
-                    </span>
-                  )}
+            <div className="dash-carbon-body">
+              <div className="dash-ring">
+                <div
+                  className="dash-ring-inner"
+                  style={{
+                    "--ring-progress": `${footprintScore}%`,
+                  }}
+                >
+                  <strong>{footprintScore}%</strong>
+                  <span>eco progress</span>
+                </div>
+              </div>
 
+              <div className="dash-chart-area">
+                <div className="dash-chart">
+                  {chartValues.map((value, index) => (
+                    <div className="dash-chart-column" key={index}>
+                      <div
+                        className="dash-chart-bar"
+                        style={{
+                          height: `${value}%`,
+                        }}
+                      >
+                        <span />
+                      </div>
+
+                      <small>
+                        {activePeriod === "1Y"
+                          ? [
+                              "J",
+                              "F",
+                              "M",
+                              "A",
+                              "M",
+                              "J",
+                              "J",
+                              "A",
+                              "S",
+                              "O",
+                              "N",
+                              "D",
+                            ][index]
+                          : activePeriod === "7D"
+                          ? [
+                              "M",
+                              "T",
+                              "W",
+                              "T",
+                              "F",
+                              "S",
+                              "S",
+                            ][index]
+                          : [
+                              "1",
+                              "4",
+                              "7",
+                              "10",
+                              "13",
+                              "16",
+                              "19",
+                              "22",
+                              "25",
+                              "28",
+                            ][index]}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="dash-carbon-side">
+                <div>
+                  <span>Total footprint</span>
+                  <strong>{stats.totalCO2.toFixed(1)} kg</strong>
                 </div>
 
-                <h3>
-                  {challengeLocked
-                    ? "Your next challenge is growing."
-                    : challenge.challenge.title}
-                </h3>
+                <div>
+                  <span>Completed days</span>
+                  <strong>{stats.completedDays}</strong>
+                </div>
 
-                <p className="challenge-description">
-                  {challengeLocked
-                    ? "You've completed today's sustainability action. Your next challenge unlocks after the 24-hour cooldown."
-                    : challenge.challenge.description}
-                </p>
-
-                {!challengeLocked && (
-                  <div className="challenge-action-box">
-
-                    <span>ACTION</span>
-
-                    <strong>
-                      {challenge.challenge.action}
-                    </strong>
-
-                  </div>
-                )}
-
-                {challengeMessage && (
-                  <div className="challenge-success-message">
-                    ✓ {challengeMessage}
-                  </div>
-                )}
-
-                {/* LOCKED STATE */}
-                {challengeLocked ? (
-
-                  <div className="challenge-unlock-box">
-
-                    <span>
-                      NEXT CHALLENGE UNLOCKS IN
-                    </span>
-
-                    <div className="challenge-countdown">
-                      {countdown || "24:00:00"}
-                      <small>
-                        remaining
-                      </small>
-                    </div>
-
-                    <p className="challenge-unlock-note">
-                      Keep your progress safe. The next action
-                      becomes available automatically.
-                    </p>
-
-                  </div>
-
-                ) : challenge.completed ? (
-
-                  /* COMPLETED STATE */
-                  <div className="challenge-completed-state">
-
-                    <span className="challenge-check">
-                      ✓
-                    </span>
-
-                    <div>
-
-                      <strong>
-                        Completed today
-                      </strong>
-
-                      <small>
-                        Your next challenge is unlocking now.
-                      </small>
-
-                    </div>
-
-                  </div>
-
-                ) : (
-
-                  /* ACTIVE STATE */
-                  <div className="challenge-controls">
-
-                    <button
-                      type="button"
-                      className="challenge-action-button"
-                      onClick={handleCompleteChallenge}
-                      disabled={challengeCompleting}
-                    >
-                      {challengeCompleting
-                        ? "Saving..."
-                        : "I completed this →"}
-                    </button>
-
-                    <span className="challenge-honesty">
-                      Complete only if you genuinely did it.
-                    </span>
-
-                  </div>
-
-                )}
-
+                <div>
+                  <span>Calculations</span>
+                  <strong>{stats.calculations}</strong>
+                </div>
               </div>
-
-            </article>
-          )}
-
-      </section>
-
-      {/* ACTIONS */}
-      <section className="dashboard-actions">
-
-        <div className="dashboard-section-heading">
-
-          <span>KEEP MOVING</span>
-
-          <h2>
-            What will you do today?
-          </h2>
-
-        </div>
-
-        <div className="dashboard-grid">
-
-          {/* CALCULATOR */}
-          <Link
-            to="/explore"
-            className="dashboard-card featured"
-          >
-            <span>🌍</span>
-
-            <h3>
-              Calculate your impact
-            </h3>
-
-            <p>
-              Measure the footprint of your everyday choices.
-            </p>
-
-            <strong>
-              Start calculating →
-            </strong>
-          </Link>
-
-          {/* DAILY CHALLENGES */}
-          <article className="dashboard-card dashboard-card-live">
-
-            <span>🎯</span>
-
-            <h3>
-              Daily challenges
-            </h3>
-
-            <p>
-              Complete one practical sustainability action every
-              day and grow your progress.
-            </p>
-
-            <strong>
-              Today's challenge ↑
-            </strong>
-
+            </div>
           </article>
 
-          {/* FOREST */}
-          <Link
-            to="/forest"
-            className="dashboard-card featured"
-          >
+          <aside className="dash-side-panel">
+            <div className="dash-mini-profile">
+              <div className="dash-big-avatar">🌱</div>
 
-            <span>🌳</span>
+              <div>
+                <strong>{username}</strong>
+                <span>
+                  <i /> {level.name}
+                </span>
+              </div>
+            </div>
 
-            <h3>
-              My Forest
-            </h3>
+            <div className="dash-quick-box">
+              <div className="dash-panel-header compact">
+                <div>
+                  <span className="dash-section-kicker">
+                    SHORTCUTS
+                  </span>
+                  <h2>Quick Actions</h2>
+                </div>
+              </div>
+
+              <QuickAction
+                icon="🧮"
+                title="Calculate Footprint"
+                text="Record today's impact"
+                onClick={() => navigate("/calculator")}
+              />
+
+              <QuickAction
+                icon="🌲"
+                title="View My Forest"
+                text="See your trees grow"
+                onClick={() => navigate("/forest")}
+              />
+
+              <QuickAction
+                icon="🎯"
+                title="Challenges"
+                text="Complete eco missions"
+                onClick={() => navigate("/challenges")}
+              />
+
+              <QuickAction
+                icon="🏆"
+                title="Check Rewards"
+                text="View points & badges"
+                onClick={() => navigate("/rewards")}
+              />
+
+              <QuickAction
+                icon="🧘"
+                title="Focus Session"
+                text="Take a green break"
+                onClick={() => navigate("/focus")}
+              />
+            </div>
+          </aside>
+        </section>
+
+        <section className="dash-lower-grid">
+          <article className="dash-panel dash-weekly">
+            <div className="dash-panel-header">
+              <div>
+                <span className="dash-section-kicker">
+                  ACTIVITY
+                </span>
+                <h2>Your Green Journey</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate("/progress")}
+              >
+                View details →
+              </button>
+            </div>
+
+            <div className="dash-week-bars">
+              {[42, 56, 49, 63, 51, 71, 84].map(
+                (height, index) => (
+                  <div className="dash-week-day" key={index}>
+                    <div className="dash-week-bar-wrap">
+                      <span style={{ height: `${height}%` }} />
+                    </div>
+
+                    <small>
+                      {
+                        [
+                          "Mon",
+                          "Tue",
+                          "Wed",
+                          "Thu",
+                          "Fri",
+                          "Sat",
+                          "Sun",
+                        ][index]
+                      }
+                    </small>
+                  </div>
+                )
+              )}
+            </div>
+
+            <div className="dash-week-message">
+              <span>
+                {stats.streak > 0 ? "🔥" : "🌱"}
+              </span>
+
+              <div>
+                <strong>
+                  {stats.streak > 0
+                    ? "You're on a green streak!"
+                    : "Start your green streak!"}
+                </strong>
+
+                <small>
+                  {stats.streak > 0
+                    ? `${stats.streak} consecutive eco day${
+                        stats.streak === 1 ? "" : "s"
+                      } completed.`
+                    : "Complete an eco activity to begin."}
+                </small>
+              </div>
+            </div>
+          </article>
+
+          <article className="dash-panel">
+            <div className="dash-panel-header">
+              <div>
+                <span className="dash-section-kicker">
+                  MISSIONS
+                </span>
+                <h2>Current Challenges</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate("/challenges")}
+              >
+                View all →
+              </button>
+            </div>
+
+            <div className="dash-challenges">
+              <div className="dash-challenge">
+                <span className="challenge-icon">💧</span>
+
+                <div>
+                  <strong>Green Start</strong>
+                  <small>
+                    Complete today's eco calculation
+                  </small>
+
+                  <div className="challenge-progress">
+                    <span
+                      style={{
+                        width:
+                          stats.completedDays > 0
+                            ? "100%"
+                            : "0%",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <b>
+                  {stats.completedDays > 0 ? "1/1" : "0/1"}
+                </b>
+              </div>
+
+              <div className="dash-challenge">
+                <span className="challenge-icon">🔥</span>
+
+                <div>
+                  <strong>7-Day Warrior</strong>
+                  <small>Build a consistent green streak</small>
+
+                  <div className="challenge-progress">
+                    <span
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (stats.streak / 7) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <b>{Math.min(stats.streak, 7)}/7</b>
+              </div>
+
+              <div className="dash-challenge">
+                <span className="challenge-icon">🌳</span>
+
+                <div>
+                  <strong>Forest Builder</strong>
+                  <small>Grow your virtual forest</small>
+
+                  <div className="challenge-progress">
+                    <span
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (trees / 20) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <b>{Math.min(trees, 20)}/20</b>
+              </div>
+            </div>
+          </article>
+
+          <article className="dash-panel dash-rewards">
+            <div className="dash-panel-header">
+              <div>
+                <span className="dash-section-kicker">
+                  ACHIEVEMENTS
+                </span>
+
+                <h2>Your Rewards</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate("/rewards")}
+              >
+                View all →
+              </button>
+            </div>
+
+            <div className="dash-reward-list">
+              <div
+                className={`dash-reward ${
+                  stats.completedDays >= 1 ? "unlocked" : ""
+                }`}
+              >
+                <span>🌱</span>
+
+                <div>
+                  <strong>First Footprint</strong>
+                  <small>Begin your green journey</small>
+                </div>
+
+                <b>
+                  {stats.completedDays >= 1 ? "✓" : "🔒"}
+                </b>
+              </div>
+
+              <div
+                className={`dash-reward ${
+                  stats.completedDays >= 7 ? "unlocked" : ""
+                }`}
+              >
+                <span>🔥</span>
+
+                <div>
+                  <strong>Day Explorer</strong>
+                  <small>Complete 7 eco days</small>
+                </div>
+
+                <b>
+                  {stats.completedDays >= 7 ? "✓" : "🔒"}
+                </b>
+              </div>
+
+              <div
+                className={`dash-reward ${
+                  stats.points >= 500 ? "unlocked" : ""
+                }`}
+              >
+                <span>⭐</span>
+
+                <div>
+                  <strong>Climate Champion</strong>
+                  <small>Reach 500 points</small>
+                </div>
+
+                <b>
+                  {stats.points >= 500 ? "✓" : "🔒"}
+                </b>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section
+          className="dash-bottom-forest"
+          style={{
+            backgroundImage: `linear-gradient(90deg, rgba(0,20,13,.96), rgba(0,20,13,.4)), url("${LEAF_IMAGE}")`,
+          }}
+        >
+          <div>
+            <span>YOUR DIGITAL FOREST</span>
+
+            <h2>
+              Small steps.
+              <br />
+              <em>Big impact.</em>
+            </h2>
 
             <p>
-              Watch your actions grow into your own digital
-              ecosystem.
+              Your sustainable actions aren't just numbers.
+              They're helping your forest come alive.
             </p>
 
-            <strong>
-              Enter your forest →
-            </strong>
-
-          </Link>
-
-          {/* POMODORO */}
-          <div className="dashboard-card">
-
-            <span>⏱️</span>
-
-            <h3>
-              Focus with Pomodoro
-            </h3>
-
-            <p>
-              Turn focused time into another part of your journey.
-            </p>
-
-            <strong>
-              Coming next →
-            </strong>
-
+            <button
+              type="button"
+              onClick={() => navigate("/forest")}
+            >
+              Enter the Forest <span>🌲 →</span>
+            </button>
           </div>
 
-        </div>
+          <div className="dash-bottom-trees">
+            🌲 🌳 🌲
+          </div>
+        </section>
 
-      </section>
-
-      {/* FOOTER */}
-      <footer className="dashboard-footer">
-        GREEN PULSE · BUILDING BETTER HABITS, ONE ACTION AT A TIME.
-      </footer>
-
-    </main>
+        <footer className="dash-footer">
+          GREEN PULSE CSEAIML
+          <span>•</span>
+          Digital Green Challenge 2026
+          <span>•</span>
+          Grow responsibly. 🌍
+        </footer>
+      </main>
+    </div>
   );
 }
-
-export default Dashboard;
