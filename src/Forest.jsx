@@ -3,553 +3,680 @@ import "./Forest.css";
 
 /*
   GREEN PULSE — FOREST
-  ----------------------------------------------------
-  Game-style animated forest.
-  Only Forest.jsx + Forest.css are required.
-
+  ------------------------------------------------------------
   IMPORTANT:
-  - Remote assets are optional.
-  - Every remote visual/audio asset has failure protection.
-  - No Web Audio API / oscillator beeps.
-  - System time controls the forest lighting.
+  The wildlife layer is intentionally separated from the
+  environment. Do NOT put ordinary wildlife footage inside
+  these cards.
+
+  For production-quality wildlife, replace the sprite URLs
+  below with transparent animated WebP/APNG/GIF assets.
+
+  Recommended asset format:
+      transparent animated WebP
+      512–1024 px
+      full body
+      feet visible
+      no background
+      side/profile view
 */
 
-const WORLD_WIDTH = 9000;
+const WORLD_WIDTH = 11000;
 
 const ASSETS = {
-  // Large cinematic environmental footage.
-  jungleVideo:
+  /*
+    These are placeholders for CLEAN transparent animated assets.
+
+    The component safely hides an asset if the URL fails.
+    Nothing else on the Forest page crashes.
+  */
+
+  animals: {
+    deer:
+      "https://www.rawpixel.com/image/14580014/animated-deer-gif-png-05062024",
+    elephant:
+      "https://www.rawpixel.com/image/14580015/animated-elephant-gif",
+    tiger:
+      "https://www.rawpixel.com/image/14580016/animated-tiger-gif",
+    langur:
+      "https://www.rawpixel.com/image/14580017/animated-monkey-gif",
+  },
+
+  /*
+    Environmental ambience only.
+    Wildlife itself is NOT represented by these background videos.
+  */
+  ambience:
     "https://cdn.pixabay.com/video/2020/05/24/40211-424006545_large.mp4",
 
-  // Real ambient recordings.
-  forestSound:
-    "https://upload.wikimedia.org/wikipedia/commons/4/4e/Amazon_Rainforest_Ambience.ogg",
-
-  rainSound:
-    "https://upload.wikimedia.org/wikipedia/commons/0/09/Rain_on_leaves.ogg",
-
-  birdsSound:
-    "https://upload.wikimedia.org/wikipedia/commons/2/2d/Bird_songs_in_the_jungle.ogg",
-
-  // Animated wildlife videos/assets.
-  deerVideo:
-    "https://cdn.pixabay.com/video/2020/05/24/40215-424006630_large.mp4",
-
-  elephantVideo:
-    "https://cdn.pixabay.com/video/2020/05/24/40218-424006710_large.mp4",
-
-  tigerVideo:
-    "https://cdn.pixabay.com/video/2020/05/24/40213-424006580_large.mp4",
-
-  monkeyVideo:
-    "https://cdn.pixabay.com/video/2020/05/24/40216-424006655_large.mp4",
+  sounds: {
+    forest:
+      "https://upload.wikimedia.org/wikipedia/commons/2/2b/Amazon_Rainforest_Ambience.ogg",
+    rain:
+      "https://upload.wikimedia.org/wikipedia/commons/0/0e/Rain_on_leaves.ogg",
+  },
 };
 
-/* ----------------------------------------------------
-   TIME
----------------------------------------------------- */
-
-function getForestPhase(date = new Date()) {
-  const hour = date.getHours() + date.getMinutes() / 60;
+function getPhase() {
+  const hour = new Date().getHours();
 
   if (hour >= 5 && hour < 7) return "dawn";
   if (hour >= 7 && hour < 11) return "morning";
   if (hour >= 11 && hour < 16) return "noon";
   if (hour >= 16 && hour < 19) return "evening";
-
   return "night";
 }
 
-function phaseLabel(phase) {
-  return {
+function getWeather() {
+  const options = ["Clear", "Cloudy", "Mist", "Rain"];
+  return options[Math.floor(Date.now() / 900000) % options.length];
+}
+
+const ZONES = [
+  { x: 300, name: "Forest Entrance" },
+  { x: 1700, name: "Emerald Grove" },
+  { x: 3300, name: "River Bend" },
+  { x: 5000, name: "Deer Meadow" },
+  { x: 6800, name: "Ancient Woods" },
+  { x: 8600, name: "Moonlit Grove" },
+  { x: 10100, name: "Deep Forest" },
+];
+
+const ANIMALS = [
+  {
+    id: "sambar-01",
+    species: "Sambar Deer",
+    type: "deer",
+    x: 2200,
+    size: 155,
+    speed: 0.55,
+    habitat: "Forest edges, grasslands and woodland clearings",
+    diet: "Leaves, grass, shoots, fruits and aquatic plants",
+    region: "Indian subcontinent and Southeast Asia",
+    facts: [
+      "One of India's largest deer species.",
+      "Males develop impressive antlers.",
+      "They are particularly active around dawn and dusk.",
+    ],
+  },
+  {
+    id: "langur-01",
+    species: "Hanuman Langur",
+    type: "langur",
+    x: 3000,
+    size: 125,
+    speed: 0.85,
+    habitat: "Forests, woodland and rocky areas",
+    diet: "Leaves, fruits, flowers and seeds",
+    region: "Indian subcontinent",
+    facts: [
+      "Known for their long tails.",
+      "They spend substantial time in trees.",
+      "They communicate using many vocalisations.",
+    ],
+  },
+  {
+    id: "elephant-01",
+    species: "Asian Elephant",
+    type: "elephant",
+    x: 4400,
+    size: 230,
+    speed: 0.28,
+    habitat: "Forests, grasslands and river corridors",
+    diet: "Grass, leaves, bark, roots and fruit",
+    region: "South and Southeast Asia",
+    facts: [
+      "Asian elephants are highly social mammals.",
+      "Their trunks are used for breathing, feeding and drinking.",
+      "Water sources are important parts of their habitat.",
+    ],
+  },
+  {
+    id: "tiger-01",
+    species: "Bengal Tiger",
+    type: "tiger",
+    x: 6100,
+    size: 190,
+    speed: 0.72,
+    habitat: "Dense forests, grasslands and wetlands",
+    diet: "Primarily large and medium-sized mammals",
+    region: "Indian subcontinent",
+    facts: [
+      "Every tiger has a unique stripe pattern.",
+      "Tigers are powerful solitary predators.",
+      "They can move quietly through dense vegetation.",
+    ],
+  },
+  {
+    id: "deer-02",
+    species: "Spotted Deer",
+    type: "deer",
+    x: 7600,
+    size: 135,
+    speed: 0.62,
+    habitat: "Open woodland and forest clearings",
+    diet: "Grass, leaves, shoots and fallen fruit",
+    region: "Indian subcontinent",
+    facts: [
+      "Their white spots remain visible throughout life.",
+      "They often stay close to water.",
+      "They use alarm calls when predators are detected.",
+    ],
+  },
+  {
+    id: "elephant-02",
+    species: "Forest Elephant",
+    type: "elephant",
+    x: 9300,
+    size: 205,
+    speed: 0.25,
+    habitat: "Dense woodland near water",
+    diet: "Leaves, grass, bark, roots and fruit",
+    region: "Forest habitat",
+    facts: [
+      "Elephants strongly influence forest structure.",
+      "They create paths through dense vegetation.",
+      "They are important seed dispersers.",
+    ],
+  },
+];
+
+const OBJECTS = [
+  {
+    id: "neem",
+    x: 1150,
+    icon: "🌳",
+    title: "Neem Tree",
+    text: "Azadirachta indica",
+    facts: [
+      "Neem is native to the Indian subcontinent.",
+      "Different parts of the tree have traditional uses.",
+      "It is well adapted to warm and relatively dry conditions.",
+    ],
+  },
+  {
+    id: "banyan",
+    x: 2550,
+    icon: "🌳",
+    title: "Banyan Tree",
+    text: "Ficus benghalensis",
+    facts: [
+      "Banyan trees can develop aerial prop roots.",
+      "A mature tree can occupy a very large area.",
+      "Its fruits provide food for many animals.",
+    ],
+  },
+  {
+    id: "riverstone",
+    x: 3650,
+    icon: "🪨",
+    title: "River Stone",
+    text: "A smooth stone shaped by flowing water.",
+    facts: [
+      "Moving water gradually wears down rocks.",
+      "River stones often become rounded through erosion.",
+      "Small organisms can live around stones in streams.",
+    ],
+  },
+  {
+    id: "sal",
+    x: 5650,
+    icon: "🌲",
+    title: "Sal Tree",
+    text: "Shorea robusta",
+    facts: [
+      "Sal is an important tree of northern and central Indian forests.",
+      "It can form extensive natural forests.",
+      "Its wood is widely valued.",
+    ],
+  },
+  {
+    id: "fallen",
+    x: 8050,
+    icon: "🪵",
+    title: "Fallen Log",
+    text: "Dead wood is part of a living forest.",
+    facts: [
+      "Fallen wood returns nutrients to the soil.",
+      "Fungi and insects break down dead material.",
+      "Logs provide shelter for many organisms.",
+    ],
+  },
+];
+
+function SafeImage({ src, alt, className, onBroken }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) return null;
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      draggable="false"
+      onError={() => {
+        setFailed(true);
+        onBroken?.();
+      }}
+    />
+  );
+}
+
+function SafeVideo({ src, className }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) return null;
+
+  return (
+    <video
+      className={className}
+      src={src}
+      autoPlay
+      muted
+      loop
+      playsInline
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function AnimalSprite({
+  animal,
+  onClick,
+  onDoubleClick,
+  fed,
+  named,
+  moving,
+}) {
+  /*
+    This component intentionally DOES NOT draw a fake animal.
+
+    If a clean transparent sprite isn't available, the animal
+    simply doesn't render instead of becoming a muddy rectangle
+    or a CSS blob.
+  */
+
+  const src = ASSETS.animals[animal.type];
+
+  return (
+    <button
+      type="button"
+      className={[
+        "wildlife",
+        `wildlife--${animal.type}`,
+        moving ? "wildlife--moving" : "",
+        fed ? "wildlife--fed" : "",
+      ].join(" ")}
+      style={{
+        left: `${animal.x}px`,
+        width: `${animal.size}px`,
+        height: `${animal.size}px`,
+      }}
+      onClick={onClick}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        onDoubleClick();
+      }}
+      aria-label={`Discover ${animal.species}`}
+    >
+      <span className="wildlife-ground-shadow" />
+
+      <SafeImage
+        src={src}
+        alt={animal.species}
+        className="wildlife-sprite"
+      />
+
+      <span className="wildlife-name">
+        {named || animal.species}
+      </span>
+
+      {fed && <span className="wildlife-fed">FED</span>}
+    </button>
+  );
+}
+
+function InfoPanel({ selected, onClose, onFeed, onName }) {
+  if (!selected) return null;
+
+  const isAnimal = selected.kind === "animal";
+
+  return (
+    <div className="forest-modal-backdrop" onClick={onClose}>
+      <section
+        className="forest-info-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button className="modal-close" onClick={onClose}>
+          ×
+        </button>
+
+        {isAnimal ? (
+          <>
+            <div className="info-kicker">WILDLIFE DISCOVERY</div>
+
+            <h2>{selected.data.species}</h2>
+
+            <p className="info-subtitle">
+              {selected.data.habitat}
+            </p>
+
+            <div className="animal-fact-grid">
+              <div>
+                <small>DIET</small>
+                <strong>{selected.data.diet}</strong>
+              </div>
+
+              <div>
+                <small>REGION</small>
+                <strong>{selected.data.region}</strong>
+              </div>
+            </div>
+
+            <ul className="fact-list">
+              {selected.data.facts.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+
+            <div className="animal-actions">
+              <button onClick={onFeed}>
+                🍎 Feed
+              </button>
+
+              <button onClick={onName}>
+                ✏️ Give a name
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="info-kicker">FOREST DISCOVERY</div>
+
+            <h2>
+              {selected.data.icon} {selected.data.title}
+            </h2>
+
+            <p className="info-subtitle">
+              {selected.data.text}
+            </p>
+
+            <ul className="fact-list">
+              {selected.data.facts.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+export default function Forest() {
+  const [phase, setPhase] = useState(getPhase);
+  const [weather, setWeather] = useState(getWeather);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(false);
+
+  const [selected, setSelected] = useState(null);
+
+  const [worldX, setWorldX] = useState(0);
+  const [moving, setMoving] = useState(false);
+
+  const [animals, setAnimals] = useState(ANIMALS);
+
+  const [namedAnimals, setNamedAnimals] = useState(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("greenpulse_forest_names") || "{}"
+      );
+    } catch {
+      return {};
+    }
+  });
+
+  const [fedAnimals, setFedAnimals] = useState(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("greenpulse_forest_fed") || "{}"
+      );
+    } catch {
+      return {};
+    }
+  });
+
+  const [audioError, setAudioError] = useState(false);
+
+  const forestAudioRef = useRef(null);
+  const rainAudioRef = useRef(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPhase(getPhase());
+      setWeather(getWeather());
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "greenpulse_forest_names",
+        JSON.stringify(namedAnimals)
+      );
+    } catch {}
+  }, [namedAnimals]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "greenpulse_forest_fed",
+        JSON.stringify(fedAnimals)
+      );
+    } catch {}
+  }, [fedAnimals]);
+
+  useEffect(() => {
+    const down = (event) => {
+      if (event.key === "ArrowLeft") {
+        setWorldX((x) => Math.max(0, x - 32));
+        setMoving(true);
+      }
+
+      if (event.key === "ArrowRight") {
+        setWorldX((x) => Math.min(WORLD_WIDTH - 1000, x + 32));
+        setMoving(true);
+      }
+
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setSelected(null);
+      }
+    };
+
+    const up = () => setMoving(false);
+
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!soundOn) {
+      forestAudioRef.current?.pause();
+      rainAudioRef.current?.pause();
+      return;
+    }
+
+    const forest = forestAudioRef.current;
+
+    if (forest) {
+      forest.volume = 0.22;
+
+      forest
+        .play()
+        .catch(() => setAudioError(true));
+    }
+
+    const rain = rainAudioRef.current;
+
+    if (rain) {
+      rain.volume = weather === "Rain" ? 0.28 : 0;
+
+      if (weather === "Rain") {
+        rain
+          .play()
+          .catch(() => setAudioError(true));
+      } else {
+        rain.pause();
+      }
+    }
+  }, [soundOn, weather]);
+
+  const visibleAnimals = useMemo(() => {
+    return animals.map((animal) => {
+      const direction =
+        animal.id.charCodeAt(animal.id.length - 1) % 2 === 0
+          ? 1
+          : -1;
+
+      let nextX = animal.x;
+
+      if (moving) {
+        nextX += direction * animal.speed * 8;
+      }
+
+      nextX = Math.max(500, Math.min(WORLD_WIDTH - 700, nextX));
+
+      return {
+        ...animal,
+        x: nextX,
+      };
+    });
+  }, [animals, moving]);
+
+  function discoverAnimal(animal) {
+    setSelected({
+      kind: "animal",
+      data: animal,
+    });
+  }
+
+  function discoverObject(object) {
+    setSelected({
+      kind: "object",
+      data: object,
+    });
+  }
+
+  function feedSelected() {
+    if (!selected || selected.kind !== "animal") return;
+
+    const id = selected.data.id;
+
+    setFedAnimals((old) => ({
+      ...old,
+      [id]: true,
+    }));
+
+    setAnimals((old) =>
+      old.map((animal) =>
+        animal.id === id
+          ? {
+              ...animal,
+              x: Math.min(
+                WORLD_WIDTH - 700,
+                animal.x + 180
+              ),
+            }
+          : animal
+      )
+    );
+  }
+
+  function nameSelected() {
+    if (!selected || selected.kind !== "animal") return;
+
+    const current =
+      namedAnimals[selected.data.id] ||
+      selected.data.species;
+
+    const value = window.prompt(
+      `Give this ${selected.data.species} a name:`,
+      current
+    );
+
+    if (!value?.trim()) return;
+
+    setNamedAnimals((old) => ({
+      ...old,
+      [selected.data.id]: value.trim(),
+    }));
+  }
+
+  function jumpToZone(zoneX) {
+    setWorldX(
+      Math.max(
+        0,
+        Math.min(WORLD_WIDTH - 1000, zoneX - 400)
+      )
+    );
+
+    setMenuOpen(false);
+  }
+
+  const phaseLabel = {
     dawn: "Dawn",
     morning: "Morning",
     noon: "Noon",
     evening: "Golden Evening",
     night: "Night",
   }[phase];
-}
-
-/* ----------------------------------------------------
-   SAFE MEDIA
----------------------------------------------------- */
-
-function SafeVideo({
-  src,
-  className = "",
-  poster,
-  muted = true,
-  loop = true,
-  autoPlay = true,
-  onFail,
-}) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed || !src) return null;
 
   return (
-    <video
-      className={className}
-      src={src}
-      poster={poster}
-      muted={muted}
-      loop={loop}
-      autoPlay={autoPlay}
-      playsInline
-      preload="metadata"
-      onError={() => {
-        setFailed(true);
-        onFail?.();
-      }}
-    />
-  );
-}
-
-function SafeAudio({ src, enabled, volume = 0.35 }) {
-  const audioRef = useRef(null);
-
-  useEffect(() => {
-    if (!src) return;
-
-    const audio = new Audio(src);
-    audio.loop = true;
-    audio.volume = volume;
-    audio.preload = "none";
-    audioRef.current = audio;
-
-    if (enabled) {
-      audio.play().catch(() => {});
-    }
-
-    return () => {
-      audio.pause();
-      audio.src = "";
-      audioRef.current = null;
-    };
-  }, [src]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (enabled) {
-      audio.play().catch(() => {});
-    } else {
-      audio.pause();
-    }
-  }, [enabled]);
-
-  return null;
-}
-
-/* ----------------------------------------------------
-   WORLD DATA
----------------------------------------------------- */
-
-const ZONES = [
-  {
-    name: "Forest Entrance",
-    start: 0,
-    description: "The quiet entrance to GreenPulse Forest.",
-  },
-  {
-    name: "Emerald Grove",
-    start: 1450,
-    description: "Dense vegetation and hidden wildlife.",
-  },
-  {
-    name: "River Bend",
-    start: 3050,
-    description: "A clear river crossing the forest.",
-  },
-  {
-    name: "Deer Meadow",
-    start: 4700,
-    description: "Open grassland surrounded by old trees.",
-  },
-  {
-    name: "Ancient Woods",
-    start: 6250,
-    description: "Huge old trees and deeper wildlife.",
-  },
-  {
-    name: "Moonlit Grove",
-    start: 7800,
-    description: "The quietest part of the forest.",
-  },
-];
-
-const ANIMALS = [
-  {
-    id: "deer-1",
-    name: "Sambar Deer",
-    type: "deer",
-    x: 1200,
-    size: "large",
-    video: ASSETS.deerVideo,
-    habitat: "Forest edges, grasslands and river areas",
-    diet: "Grass, leaves, shoots and fruit",
-    region: "Indian subcontinent and Southeast Asia",
-    facts: [
-      "Sambar deer are among the largest deer species in Asia.",
-      "They are strong swimmers and are commonly associated with forest water sources.",
-      "They are mostly active during dawn, dusk and night.",
-    ],
-  },
-  {
-    id: "monkey-1",
-    name: "Hanuman Langur",
-    type: "monkey",
-    x: 2250,
-    size: "medium",
-    video: ASSETS.monkeyVideo,
-    habitat: "Woodlands and forest canopies",
-    diet: "Leaves, fruit, flowers and seeds",
-    region: "South Asia",
-    facts: [
-      "Langurs spend a large amount of their time in trees.",
-      "Their long tails help with balance while moving through branches.",
-      "They live in social groups.",
-    ],
-  },
-  {
-    id: "elephant-1",
-    name: "Asian Elephant",
-    type: "elephant",
-    x: 3850,
-    size: "huge",
-    video: ASSETS.elephantVideo,
-    habitat: "Forests, grasslands and river corridors",
-    diet: "Grass, leaves, bark, roots and fruit",
-    region: "South and Southeast Asia",
-    facts: [
-      "Asian elephants are highly social animals.",
-      "Water sources are extremely important to elephant populations.",
-      "Elephants can significantly alter forest structure while feeding.",
-    ],
-  },
-  {
-    id: "tiger-1",
-    name: "Bengal Tiger",
-    type: "tiger",
-    x: 5750,
-    size: "large",
-    video: ASSETS.tigerVideo,
-    habitat: "Forests, grasslands and mangrove landscapes",
-    diet: "Carnivorous",
-    region: "Indian subcontinent",
-    facts: [
-      "The Bengal tiger is India's national animal.",
-      "Tigers are generally solitary.",
-      "They depend on healthy prey populations and large connected habitats.",
-    ],
-  },
-  {
-    id: "deer-2",
-    name: "Spotted Deer",
-    type: "deer",
-    x: 6900,
-    size: "medium",
-    video: ASSETS.deerVideo,
-    habitat: "Grasslands and open woodland",
-    diet: "Grass, leaves and fallen fruit",
-    region: "Indian subcontinent",
-    facts: [
-      "Spotted deer are also known as chital.",
-      "Their spotted coat helps break up their outline in woodland.",
-      "They often remain close to water.",
-    ],
-  },
-  {
-    id: "elephant-2",
-    name: "Forest Elephant",
-    type: "elephant",
-    x: 8150,
-    size: "huge",
-    video: ASSETS.elephantVideo,
-    habitat: "Deep forest and river corridors",
-    diet: "Vegetation",
-    region: "South Asia",
-    facts: [
-      "Elephants disperse seeds through their movement and feeding.",
-      "Their trails can become important pathways for other animals.",
-    ],
-  },
-];
-
-/* ----------------------------------------------------
-   INTERACTIVE OBJECTS
----------------------------------------------------- */
-
-const OBJECTS = [
-  {
-    id: "neem",
-    x: 820,
-    type: "tree",
-    icon: "🌳",
-    name: "Neem Tree",
-    facts: [
-      "Scientific name: Azadirachta indica",
-      "Native to the Indian subcontinent.",
-      "Neem is widely valued for its traditional uses.",
-      "It is drought tolerant and can grow in challenging conditions.",
-      "Its foliage provides shade and habitat.",
-    ],
-  },
-  {
-    id: "banyan",
-    x: 1900,
-    type: "tree",
-    icon: "🌳",
-    name: "Banyan Tree",
-    facts: [
-      "Scientific name: Ficus benghalensis",
-      "India's national tree.",
-      "Banyans can develop aerial roots that become supporting trunks.",
-      "Their fruits provide food for many animals.",
-    ],
-  },
-  {
-    id: "river-rock",
-    x: 3300,
-    type: "rock",
-    icon: "🪨",
-    name: "River Stone",
-    facts: [
-      "River rocks are shaped and smoothed by moving water.",
-      "Rivers create habitats for fish, insects, amphibians and plants.",
-    ],
-  },
-  {
-    id: "sal",
-    x: 5350,
-    type: "tree",
-    icon: "🌳",
-    name: "Sal Tree",
-    facts: [
-      "Scientific name: Shorea robusta",
-      "A major tree of northern and central Indian forests.",
-      "Sal forests support a wide range of wildlife.",
-    ],
-  },
-  {
-    id: "old-log",
-    x: 7350,
-    type: "log",
-    icon: "🪵",
-    name: "Fallen Log",
-    facts: [
-      "Dead wood is an important part of forest ecosystems.",
-      "Fallen logs can shelter insects, fungi, reptiles and small mammals.",
-      "Decomposition returns nutrients to the soil.",
-    ],
-  },
-];
-
-/* ----------------------------------------------------
-   HELPERS
----------------------------------------------------- */
-
-function zoneForPosition(position) {
-  let selected = ZONES[0];
-
-  for (const zone of ZONES) {
-    if (position >= zone.start) selected = zone;
-  }
-
-  return selected;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-/* ----------------------------------------------------
-   MAIN COMPONENT
----------------------------------------------------- */
-
-export default function Forest() {
-  const [now, setNow] = useState(new Date());
-  const [position, setPosition] = useState(350);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [soundOn, setSoundOn] = useState(false);
-  const [weather, setWeather] = useState("clear");
-  const [inspected, setInspected] = useState(null);
-  const [petNames, setPetNames] = useState({});
-  const [fed, setFed] = useState({});
-  const [movingAnimal, setMovingAnimal] = useState({});
-  const [discovered, setDiscovered] = useState([]);
-  const [assetFailures, setAssetFailures] = useState(0);
-
-  const phase = getForestPhase(now);
-  const zone = zoneForPosition(position);
-
-  /* Real system time */
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  /* Keyboard movement */
-  useEffect(() => {
-    const handleKey = (event) => {
-      if (event.key === "ArrowRight") {
-        setPosition((p) => clamp(p + 90, 0, WORLD_WIDTH - 1000));
-      }
-
-      if (event.key === "ArrowLeft") {
-        setPosition((p) => clamp(p - 90, 0, WORLD_WIDTH - 1000));
-      }
-
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-        setInspected(null);
-      }
-    };
-
-    window.addEventListener("keydown", handleKey);
-
-    return () => window.removeEventListener("keydown", handleKey);
-  }, []);
-
-  /* Saved pet names */
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("greenpulse_forest_pets");
-
-      if (saved) {
-        setPetNames(JSON.parse(saved));
-      }
-    } catch {
-      // Never allow local storage failure to break Forest.
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        "greenpulse_forest_pets",
-        JSON.stringify(petNames)
-      );
-    } catch {
-      // Ignore storage failure.
-    }
-  }, [petNames]);
-
-  const visibleAnimals = useMemo(() => {
-    return ANIMALS.filter(
-      (animal) =>
-        animal.x >= position - 900 &&
-        animal.x <= position + 1900
-    );
-  }, [position]);
-
-  const discoverAnimal = (animal) => {
-    setDiscovered((old) =>
-      old.includes(animal.id) ? old : [...old, animal.id]
-    );
-
-    setInspected({
-      kind: "animal",
-      data: animal,
-    });
-  };
-
-  const moveAnimal = (animal) => {
-    setMovingAnimal((old) => ({
-      ...old,
-      [animal.id]: true,
-    }));
-
-    window.setTimeout(() => {
-      setMovingAnimal((old) => ({
-        ...old,
-        [animal.id]: false,
-      }));
-    }, 2500);
-  };
-
-  const feedAnimal = (animal) => {
-    setFed((old) => ({
-      ...old,
-      [animal.id]: true,
-    }));
-
-    moveAnimal(animal);
-  };
-
-  const renamePet = (animal) => {
-    const current = petNames[animal.id] || animal.name;
-
-    const name = window.prompt(
-      `Give your ${animal.name} a name:`,
-      current
-    );
-
-    if (!name?.trim()) return;
-
-    setPetNames((old) => ({
-      ...old,
-      [animal.id]: name.trim(),
-    }));
-  };
-
-  const cycleWeather = () => {
-    const list = ["clear", "cloudy", "rain", "mist"];
-    const index = list.indexOf(weather);
-
-    setWeather(list[(index + 1) % list.length]);
-  };
-
-  const jumpToZone = (target) => {
-    setPosition(target);
-    setMenuOpen(false);
-  };
-
-  const formattedTime = now.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
-  const environmentClass = [
-    "forest-app",
-    `phase-${phase}`,
-    `weather-${weather}`,
-  ].join(" ");
-
-  return (
-    <div className={environmentClass}>
-      {/* REAL AUDIO */}
-      <SafeAudio
-        src={
-          weather === "rain"
-            ? ASSETS.rainSound
-            : phase === "night"
-            ? ASSETS.forestSound
-            : ASSETS.birdsSound
-        }
-        enabled={soundOn}
-        volume={weather === "rain" ? 0.28 : 0.22}
-      />
-
-      {/* CINEMATIC VIDEO BACKGROUND */}
+    <main
+      className={[
+        "forest-app",
+        `forest-phase-${phase}`,
+        `forest-weather-${weather.toLowerCase()}`,
+      ].join(" ")}
+    >
       <SafeVideo
-        src={ASSETS.jungleVideo}
-        className="cinematic-bg-video"
-        onFail={() => setAssetFailures((n) => n + 1)}
+        src={ASSETS.ambience}
+        className="forest-cinematic"
       />
 
+      <audio
+        ref={forestAudioRef}
+        src={ASSETS.sounds.forest}
+        loop
+        preload="none"
+        onError={() => setAudioError(true)}
+      />
+
+      <audio
+        ref={rainAudioRef}
+        src={ASSETS.sounds.rain}
+        loop
+        preload="none"
+        onError={() => setAudioError(true)}
+      />
+
+      <div className="forest-light-layer" />
       <div className="forest-vignette" />
 
-      {/* TOP BAR */}
       <header className="forest-topbar">
         <button
-          className="menu-button"
-          onClick={() => setMenuOpen((value) => !value)}
+          className="hamburger"
+          onClick={() => setMenuOpen((v) => !v)}
           aria-label="Open forest menu"
         >
           <span />
@@ -557,478 +684,246 @@ export default function Forest() {
           <span />
         </button>
 
-        <div className="forest-title">
+        <div className="forest-brand">
           <strong>GREEN PULSE</strong>
-          <span>FOREST</span>
+          <span>WILDERNESS</span>
         </div>
 
-        <div className="forest-location">
-          <span>{zone.name}</span>
-          <small>{phaseLabel(phase)}</small>
-        </div>
-
-        <div className="forest-clock">
-          {formattedTime}
+        <div className="forest-status">
+          <span>{phaseLabel}</span>
+          <span>•</span>
+          <span>{weather}</span>
         </div>
       </header>
 
-      {/* SIDE MENU */}
-      <aside className={`forest-sidebar ${menuOpen ? "open" : ""}`}>
-        <div className="sidebar-header">
-          <div>
-            <span>GREEN PULSE</span>
-            <strong>Forest Explorer</strong>
-          </div>
-
+      <aside
+        className={[
+          "forest-sidebar",
+          menuOpen ? "forest-sidebar-open" : "",
+        ].join(" ")}
+      >
+        <div className="sidebar-heading">
+          <span>EXPLORE</span>
           <button onClick={() => setMenuOpen(false)}>×</button>
         </div>
 
-        <div className="sidebar-section">
-          <p>EXPLORE</p>
+        <button onClick={() => jumpToZone(300)}>
+          🧭 Entrance
+        </button>
 
-          {ZONES.map((item) => (
-            <button
-              key={item.name}
-              className={item.name === zone.name ? "active" : ""}
-              onClick={() => jumpToZone(item.start)}
-            >
-              <span>⌁</span>
-              {item.name}
-            </button>
-          ))}
-        </div>
+        <button onClick={() => jumpToZone(1700)}>
+          🌿 Emerald Grove
+        </button>
 
-        <div className="sidebar-section">
-          <p>ENVIRONMENT</p>
+        <button onClick={() => jumpToZone(3300)}>
+          💧 River Bend
+        </button>
 
-          <button onClick={cycleWeather}>
-            <span>☁</span>
-            Weather: {weather}
-          </button>
+        <button onClick={() => jumpToZone(5000)}>
+          🦌 Deer Meadow
+        </button>
 
-          <button onClick={() => setSoundOn((v) => !v)}>
-            <span>{soundOn ? "🔊" : "🔇"}</span>
-            Forest sounds: {soundOn ? "ON" : "OFF"}
-          </button>
-        </div>
+        <button onClick={() => jumpToZone(6800)}>
+          🌲 Ancient Woods
+        </button>
 
-        <div className="sidebar-stats">
-          <div>
-            <strong>{discovered.length}</strong>
-            <span>Wildlife found</span>
-          </div>
+        <button onClick={() => jumpToZone(8600)}>
+          🌙 Moonlit Grove
+        </button>
 
-          <div>
-            <strong>{Object.keys(petNames).length}</strong>
-            <span>Named animals</span>
-          </div>
+        <div className="sidebar-divider" />
+
+        <button onClick={() => setSoundOn((v) => !v)}>
+          {soundOn ? "🔊 Sounds ON" : "🔇 Sounds OFF"}
+        </button>
+
+        <div className="sidebar-tip">
+          <strong>Explorer controls</strong>
+          <span>← → Walk through the forest</span>
+          <span>Click wildlife to discover</span>
+          <span>Double-click wildlife to startle it</span>
         </div>
       </aside>
 
-      {/* GAME VIEWPORT */}
-      <main className="forest-viewport">
+      <section className="forest-world-window">
         <div
           className="forest-world"
           style={{
-            width: WORLD_WIDTH,
-            transform: `translate3d(-${position}px, 0, 0)`,
+            width: `${WORLD_WIDTH}px`,
+            transform: `translateX(-${worldX}px)`,
           }}
         >
-          {/* DISTANT ATMOSPHERE */}
-          <div className="distant-haze" />
+          <div className="distant-hills" />
 
-          <div className="mountain-layer">
-            <div />
-            <div />
-            <div />
-          </div>
+          <div className="deep-canopy canopy-a" />
+          <div className="deep-canopy canopy-b" />
 
-          {/* DEEP FOREST */}
-          <div className="deep-canopy">
-            {Array.from({ length: 22 }).map((_, index) => (
-              <div
-                className="canopy-tree"
-                key={index}
-                style={{
-                  left: `${index * 440 - 100}px`,
-                  height: `${260 + (index % 5) * 65}px`,
-                }}
-              >
+          {Array.from({ length: 28 }).map((_, index) => (
+            <div
+              className={`forest-tree tree-${index % 6}`}
+              key={`tree-${index}`}
+              style={{
+                left: `${250 + index * 390}px`,
+                height: `${240 + (index % 5) * 55}px`,
+              }}
+            >
+              <div className="tree-trunk" />
+              <div className="tree-crown">
                 <i />
-                <b />
+                <i />
+                <i />
+                <i />
               </div>
-            ))}
-          </div>
-
-          {/* RIVER */}
-          <div className="river-zone">
-            <div className="river-surface">
-              <div className="river-highlight" />
-              <div className="river-highlight second" />
-              <div className="river-reflection" />
             </div>
+          ))}
 
-            <div className="river-bank left-bank" />
-            <div className="river-bank right-bank" />
+          <div className="river">
+            <div className="river-highlight" />
+            <div className="river-highlight river-highlight-2" />
           </div>
 
-          {/* MID TREES */}
-          <div className="mid-tree-layer">
-            {Array.from({ length: 28 }).map((_, index) => (
-              <div
-                className="realistic-tree"
-                key={index}
-                style={{
-                  left: `${index * 330 - 120}px`,
-                  transform: `scale(${0.72 + (index % 4) * 0.08})`,
-                }}
-              >
-                <div className="tree-trunk" />
-                <div className="tree-crown crown-a" />
-                <div className="tree-crown crown-b" />
-                <div className="tree-crown crown-c" />
-              </div>
-            ))}
-          </div>
+          <div className="river-bank river-bank-a" />
+          <div className="river-bank river-bank-b" />
 
-          {/* GROUND */}
-          <div className="forest-ground">
-            <div className="ground-dirt" />
+          <div className="forest-ground" />
 
-            {Array.from({ length: 75 }).map((_, index) => (
-              <div
-                key={index}
-                className="grass-clump"
-                style={{
-                  left: `${index * 125 + (index % 4) * 15}px`,
-                  bottom: `${12 + (index % 5) * 5}px`,
-                }}
-              >
-                <i />
-                <i />
-                <i />
-              </div>
-            ))}
+          {Array.from({ length: 90 }).map((_, index) => (
+            <span
+              key={`grass-${index}`}
+              className="grass-blade"
+              style={{
+                left: `${index * 120 + 30}px`,
+                bottom: `${10 + (index % 3) * 5}px`,
+                transform: `rotate(${(index % 5) - 2}deg)`,
+              }}
+            />
+          ))}
 
-            {Array.from({ length: 24 }).map((_, index) => (
-              <div
-                key={index}
-                className="fern"
-                style={{
-                  left: `${index * 375 + 50}px`,
-                }}
-              >
-                <b />
-                <b />
-                <b />
-                <b />
-              </div>
-            ))}
-          </div>
-
-          {/* INTERACTIVE FOREST OBJECTS */}
           {OBJECTS.map((object) => (
             <button
               key={object.id}
-              className={`world-object ${object.type}`}
-              style={{ left: object.x }}
-              onClick={() =>
-                setInspected({
-                  kind: "object",
-                  data: object,
-                })
-              }
-              title={`Inspect ${object.name}`}
+              className="forest-object"
+              style={{ left: `${object.x}px` }}
+              onClick={() => discoverObject(object)}
             >
-              <div className="object-visual">
-                {object.type === "tree" && (
-                  <>
-                    <div className="object-trunk" />
-                    <div className="object-crown one" />
-                    <div className="object-crown two" />
-                    <div className="object-crown three" />
-                  </>
-                )}
-
-                {object.type === "rock" && (
-                  <div className="rock-shape" />
-                )}
-
-                {object.type === "log" && (
-                  <div className="fallen-log-shape" />
-                )}
-              </div>
-
               <span>{object.icon}</span>
+              <small>{object.title}</small>
             </button>
           ))}
 
-          {/* ANIMATED WILDLIFE */}
-          {ANIMALS.map((animal) => {
-            const relativeX = animal.x;
+          {visibleAnimals.map((animal) => (
+            <AnimalSprite
+              key={animal.id}
+              animal={animal}
+              moving={moving}
+              fed={!!fedAnimals[animal.id]}
+              named={namedAnimals[animal.id]}
+              onClick={() => discoverAnimal(animal)}
+              onDoubleClick={() => {
+                setAnimals((old) =>
+                  old.map((a) =>
+                    a.id === animal.id
+                      ? {
+                          ...a,
+                          x: Math.min(
+                            WORLD_WIDTH - 700,
+                            a.x + 450
+                          ),
+                        }
+                      : a
+                  )
+                );
+              }}
+            />
+          ))}
 
-            return (
-              <button
-                key={animal.id}
-                className={[
-                  "wildlife",
-                  `animal-${animal.type}`,
-                  `animal-${animal.size}`,
-                  movingAnimal[animal.id] ? "escaping" : "",
-                ].join(" ")}
+          <div className="bird bird-1">◆</div>
+          <div className="bird bird-2">◆</div>
+          <div className="bird bird-3">◆</div>
+
+          {Array.from({ length: 35 }).map((_, i) => (
+            <span
+              key={`firefly-${i}`}
+              className="firefly"
+              style={{
+                left: `${300 + ((i * 317) % 10000)}px`,
+                top: `${180 + ((i * 113) % 330)}px`,
+                animationDelay: `${(i % 8) * 0.7}s`,
+              }}
+            />
+          ))}
+
+          {weather === "Rain" &&
+            Array.from({ length: 80 }).map((_, i) => (
+              <span
+                key={`rain-${i}`}
+                className="rain-drop"
                 style={{
-                  left: relativeX,
-                }}
-                onClick={() => discoverAnimal(animal)}
-                onDoubleClick={() => moveAnimal(animal)}
-                title={`Meet ${animal.name}`}
-              >
-                <div className="animal-shadow" />
-
-                <SafeVideo
-                  src={animal.video}
-                  className="animal-video"
-                  onFail={() =>
-                    setAssetFailures((n) => n + 1)
-                  }
-                />
-
-                {/* Fallback silhouette */}
-                <div className="animal-fallback">
-                  <div className="fallback-body" />
-                  <div className="fallback-head" />
-                  <div className="fallback-leg a" />
-                  <div className="fallback-leg b" />
-                  <div className="fallback-leg c" />
-                  <div className="fallback-leg d" />
-                </div>
-
-                <span className="animal-name">
-                  {petNames[animal.id] || animal.name}
-                </span>
-
-                {fed[animal.id] && (
-                  <span className="fed-label">FED ♥</span>
-                )}
-              </button>
-            );
-          })}
-
-          {/* BIRDS */}
-          <div className="sky-birds">
-            <span className="bird bird-one">⌁</span>
-            <span className="bird bird-two">⌁</span>
-            <span className="bird bird-three">⌁</span>
-          </div>
-
-          {/* FALLING LEAVES */}
-          <div className="leaf-field">
-            {Array.from({ length: 30 }).map((_, index) => (
-              <i
-                key={index}
-                style={{
-                  left: `${index * 310 + 30}px`,
-                  animationDelay: `${(index % 9) * 0.7}s`,
+                  left: `${(i * 137) % 100}%`,
+                  animationDelay: `${(i % 15) * 0.09}s`,
                 }}
               />
             ))}
-          </div>
 
-          {/* FIREFLIES */}
-          {phase === "night" && (
-            <div className="firefly-field">
-              {Array.from({ length: 42 }).map((_, index) => (
-                <i
-                  key={index}
-                  style={{
-                    left: `${index * 215 + 80}px`,
-                    top: `${18 + (index * 17) % 65}%`,
-                    animationDelay: `${(index % 12) * 0.45}s`,
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* RAIN */}
-          {weather === "rain" && (
-            <div className="rain-field">
-              {Array.from({ length: 120 }).map((_, index) => (
-                <i
-                  key={index}
-                  style={{
-                    left: `${(index * 73) % 100}%`,
-                    animationDelay: `${(index % 17) * 0.08}s`,
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* MIST */}
-          {weather === "mist" && (
-            <div className="mist-field">
-              <div />
-              <div />
-              <div />
-            </div>
+          {weather === "Mist" && (
+            <>
+              <div className="mist-layer mist-one" />
+              <div className="mist-layer mist-two" />
+            </>
           )}
         </div>
-      </main>
+      </section>
 
-      {/* LIGHTING */}
-      <div className={`lighting-overlay lighting-${phase}`} />
-
-      {/* CONTROLS */}
-      <div className="explore-controls">
-        <button
-          onClick={() =>
-            setPosition((p) => clamp(p - 350, 0, WORLD_WIDTH - 1000))
-          }
-        >
-          ←
-        </button>
-
-        <div>
-          <span>EXPLORE</span>
-          <small>
-            {Math.round(
-              (position / (WORLD_WIDTH - 1000)) * 100
-            )}
-            %
-          </small>
+      <div className="forest-hud">
+        <div className="hud-zone">
+          {ZONES.reduce((nearest, zone) => {
+            return Math.abs(zone.x - worldX - 450) <
+              Math.abs(nearest.x - worldX - 450)
+              ? zone
+              : nearest;
+          }, ZONES[0]).name}
         </div>
 
-        <button
-          onClick={() =>
-            setPosition((p) =>
-              clamp(p + 350, 0, WORLD_WIDTH - 1000)
-            )
-          }
-        >
-          →
-        </button>
-      </div>
-
-      {/* STATUS */}
-      <div className="forest-status">
-        <span className="status-dot" />
-        <span>{zone.description}</span>
-        {assetFailures > 0 && (
-          <small>
-            Some optional remote assets unavailable — forest still running.
-          </small>
-        )}
-      </div>
-
-      {/* INFORMATION MODAL */}
-      {inspected && (
-        <div
-          className="forest-modal-backdrop"
-          onClick={() => setInspected(null)}
-        >
-          <section
-            className="forest-info-card"
-            onClick={(event) => event.stopPropagation()}
+        <div className="hud-controls">
+          <button
+            onMouseDown={() => setMoving(true)}
+            onMouseUp={() => setMoving(false)}
+            onMouseLeave={() => setMoving(false)}
+            onClick={() =>
+              setWorldX((x) => Math.max(0, x - 150))
+            }
           >
-            <button
-              className="close-info"
-              onClick={() => setInspected(null)}
-            >
-              ×
-            </button>
+            ←
+          </button>
 
-            {inspected.kind === "object" ? (
-              <>
-                <div className="info-icon">
-                  {inspected.data.icon}
-                </div>
+          <button
+            onMouseDown={() => setMoving(true)}
+            onMouseUp={() => setMoving(false)}
+            onMouseLeave={() => setMoving(false)}
+            onClick={() =>
+              setWorldX((x) =>
+                Math.min(WORLD_WIDTH - 1000, x + 150)
+              )
+            }
+          >
+            →
+          </button>
+        </div>
+      </div>
 
-                <span className="info-kicker">
-                  FOREST DISCOVERY
-                </span>
-
-                <h2>{inspected.data.name}</h2>
-
-                <div className="fact-list">
-                  {inspected.data.facts.map((fact) => (
-                    <p key={fact}>• {fact}</p>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <span className="info-kicker">
-                  WILDLIFE DISCOVERY
-                </span>
-
-                <h2>
-                  {petNames[inspected.data.id] ||
-                    inspected.data.name}
-                </h2>
-
-                <div className="animal-meta">
-                  <span>
-                    <strong>Habitat</strong>
-                    {inspected.data.habitat}
-                  </span>
-
-                  <span>
-                    <strong>Diet</strong>
-                    {inspected.data.diet}
-                  </span>
-
-                  <span>
-                    <strong>Region</strong>
-                    {inspected.data.region}
-                  </span>
-                </div>
-
-                <div className="fact-list">
-                  {inspected.data.facts.map((fact) => (
-                    <p key={fact}>• {fact}</p>
-                  ))}
-                </div>
-
-                <div className="pet-actions">
-                  <button
-                    onClick={() =>
-                      renamePet(inspected.data)
-                    }
-                  >
-                    ✎ Name
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      feedAnimal(inspected.data)
-                    }
-                  >
-                    🍃 Feed
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      moveAnimal(inspected.data)
-                    }
-                  >
-                    ↗ Move
-                  </button>
-                </div>
-              </>
-            )}
-          </section>
+      {audioError && (
+        <div className="asset-warning">
+          Some remote ambience could not load. Forest gameplay
+          continues normally.
         </div>
       )}
 
-      {/* MINI HELP */}
-      <div className="forest-help">
-        <span>← →</span> Explore
-        <span>•</span>
-        <span>Click</span> Wildlife / Objects
-        <span>•</span>
-        <span>Double-click</span> Animal
-      </div>
-    </div>
+      <InfoPanel
+        selected={selected}
+        onClose={() => setSelected(null)}
+        onFeed={feedSelected}
+        onName={nameSelected}
+      />
+    </main>
   );
 }
