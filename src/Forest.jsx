@@ -1,1264 +1,661 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./Forest.css";
 
-/*
-  GREEN PULSE FOREST
-  ------------------
-  Everything is remote or generated.
-  No local image/audio/download paths.
-
-  IMPORTANT:
-  Browsers normally block autoplay audio.
-  Sound starts only after the user presses SOUND.
-
-  Remote media is treated as optional:
-  if it fails, the game continues.
-*/
-
-const MEDIA = {
-  forest:
-    "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=2400&q=90",
-
-  dog:
-    "https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?auto=format&fit=crop&w=900&q=85",
-
-  butterfly:
-    "https://images.unsplash.com/photo-1473445361085-b9a07f55608b?auto=format&fit=crop&w=700&q=80",
-
-  birds:
-    "https://images.unsplash.com/photo-1444464666168-49d633b86797?auto=format&fit=crop&w=900&q=80",
-
-  forestSound:
-    "https://cdn.pixabay.com/download/audio/2022/03/15/audio_2c9d2e3f52.mp3",
-};
-
-const SEASONS = {
-  Spring: {
-    icon: "🌸",
-    sky: "spring",
-    tree: "spring",
-    description: "Fresh leaves, flowers and returning birds.",
+const seasons = {
+  spring: {
+    name: "Spring",
+    accent: "#b7d8a5",
+    sky: "linear-gradient(#b7cbb7, #d9dfc5 45%, #7e9270)",
   },
-
-  Summer: {
-    icon: "☀️",
-    sky: "summer",
-    tree: "summer",
-    description: "Warm sunlight and a lively green forest.",
+  summer: {
+    name: "Summer",
+    accent: "#d6c982",
+    sky: "linear-gradient(#83a8b8, #c5d0ba 48%, #66765d)",
   },
-
-  Autumn: {
-    icon: "🍂",
-    sky: "autumn",
-    tree: "autumn",
-    description: "Golden leaves drift through the woodland.",
+  autumn: {
+    name: "Autumn",
+    accent: "#c28b58",
+    sky: "linear-gradient(#8d7770, #c7a47e 48%, #67594e)",
   },
-
-  Winter: {
-    icon: "❄️",
-    sky: "winter",
-    tree: "winter",
-    description: "A quiet frozen forest.",
+  winter: {
+    name: "Winter",
+    accent: "#c5d7dc",
+    sky: "linear-gradient(#71899a, #b8c7cc 50%, #59666b)",
   },
 };
 
-const WEATHER = {
-  Clear: "☀️",
-  Rain: "🌧️",
-  Storm: "⛈️",
-  Snow: "❄️",
-  Fog: "🌫️",
-  Night: "🌙",
-};
+const weatherList = ["clear", "rain", "storm", "snow", "fog"];
 
-function SafeImage({ src, className, alt = "" }) {
-  const [broken, setBroken] = useState(false);
+function getTimeMode() {
+  const hour = new Date().getHours();
 
-  if (broken) return null;
+  if (hour >= 6 && hour < 17) return "day";
+  if (hour >= 17 && hour < 19) return "sunset";
+  return "night";
+}
+
+function SafeImage({ src, alt, className = "" }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <div className={`${className} image-fallback`} />;
+  }
 
   return (
     <img
       src={src}
-      className={className}
       alt={alt}
-      loading="lazy"
-      onError={() => setBroken(true)}
+      className={className}
+      onError={() => setFailed(true)}
     />
   );
 }
 
-function Forest() {
-  const [menuOpen, setMenuOpen] = useState(true);
-  const [season, setSeason] = useState("Spring");
-  const [weather, setWeather] = useState("Clear");
+export default function Forest() {
+  const [season, setSeason] = useState("summer");
+  const [weather, setWeather] = useState("clear");
+  const [timeMode, setTimeMode] = useState(getTimeMode());
 
   const [points, setPoints] = useState(() => {
-    const saved = localStorage.getItem("greenpulse_forest_points");
-    return Number(saved || 0);
+    return Number(localStorage.getItem("greenpulse_points") || 72);
   });
 
-  const [trees, setTrees] = useState(() => {
-    const saved = localStorage.getItem("greenpulse_forest_trees");
-    return Number(saved || 3);
-  });
-
-  const [fedToday, setFedToday] = useState(() => {
-    const saved = localStorage.getItem("greenpulse_fed_date");
-    return saved === new Date().toDateString();
-  });
-
-  const [dogName, setDogName] = useState(() => {
-    return localStorage.getItem("greenpulse_dog_name") || "Buddy";
-  });
-
-  const [editingDog, setEditingDog] = useState(false);
-
-  const [sound, setSound] = useState(false);
-
-  const [caveOpen, setCaveOpen] = useState(false);
-
-  const [campfire, setCampfire] = useState(false);
-
-  const [lionAwake, setLionAwake] = useState(false);
-
-  const [message, setMessage] = useState(
-    "Welcome to your living forest."
+  const [dogName, setDogName] = useState(
+    () => localStorage.getItem("greenpulse_dog_name") || "Milo"
   );
 
-  const [gardenBloom, setGardenBloom] = useState(0);
+  const [editingDog, setEditingDog] = useState(false);
+  const [dogFed, setDogFed] = useState(
+    () => localStorage.getItem("greenpulse_dog_fed") === new Date().toDateString()
+  );
 
-  const audioRef = useRef(null);
-
-  /* ----------------------------------------------------------
-     SAVE GAME
-  ---------------------------------------------------------- */
-
-  useEffect(() => {
-    localStorage.setItem(
-      "greenpulse_forest_points",
-      String(points)
-    );
-
-    localStorage.setItem(
-      "greenpulse_forest_trees",
-      String(trees)
-    );
-  }, [points, trees]);
-
-  /* ----------------------------------------------------------
-     DAILY RESET
-  ---------------------------------------------------------- */
+  const [menuOpen, setMenuOpen] = useState(true);
+  const [activePlace, setActivePlace] = useState("forest");
+  const [lionAwake, setLionAwake] = useState(false);
+  const [campfire, setCampfire] = useState(false);
+  const [caveOpen, setCaveOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(false);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const today = new Date().toDateString();
+    const timer = setInterval(() => {
+      setTimeMode(getTimeMode());
+    }, 60000);
 
-    if (
-      localStorage.getItem("greenpulse_fed_date") !== today
-    ) {
-      setFedToday(false);
-    }
+    return () => clearInterval(timer);
   }, []);
 
-  /* ----------------------------------------------------------
-     GROWTH
-  ---------------------------------------------------------- */
-
-  const level = Math.floor(points / 100) + 1;
-
-  const growthStage = useMemo(() => {
-    if (points >= 1000) return "Ancient Sanctuary";
-    if (points >= 700) return "Wild Garden";
-    if (points >= 500) return "Deep Forest";
-    if (points >= 300) return "Young Forest";
-    if (points >= 100) return "Growing Grove";
-    return "Seedling Grove";
+  useEffect(() => {
+    localStorage.setItem("greenpulse_points", points);
   }, [points]);
 
-  const nextGoal = Math.ceil((points + 1) / 100) * 100;
+  useEffect(() => {
+    localStorage.setItem("greenpulse_dog_name", dogName);
+  }, [dogName]);
 
-  /* ----------------------------------------------------------
-     MESSAGE
-  ---------------------------------------------------------- */
+  const treeCount = Math.max(1, Math.floor(points / 50));
+  const flowerCount = Math.max(3, Math.floor(points / 15));
 
-  const say = (text) => {
+  const seasonData = seasons[season];
+
+  const atmosphere = useMemo(() => {
+    if (timeMode === "night") return "night";
+    if (timeMode === "sunset") return "sunset";
+    return "day";
+  }, [timeMode]);
+
+  function showMessage(text) {
     setMessage(text);
+    setTimeout(() => setMessage(""), 2600);
+  }
 
-    window.clearTimeout(window.__gpForestMessage);
-
-    window.__gpForestMessage = window.setTimeout(() => {
-      setMessage("The forest is alive...");
-    }, 3500);
-  };
-
-  /* ----------------------------------------------------------
-     SOUND
-  ---------------------------------------------------------- */
-
-  const toggleSound = async () => {
-    if (!audioRef.current) return;
-
-    try {
-      if (!sound) {
-        audioRef.current.volume = 0.28;
-        await audioRef.current.play();
-        setSound(true);
-        say("Forest sounds are now playing.");
-      } else {
-        audioRef.current.pause();
-        setSound(false);
-      }
-    } catch {
-      setSound(false);
-      say(
-        "Your browser blocked the online audio. Try SOUND again."
-      );
-    }
-  };
-
-  /* ----------------------------------------------------------
-     FEED DOG
-  ---------------------------------------------------------- */
-
-  const feedDog = () => {
-    if (fedToday) {
-      say(`${dogName} has already been fed today ❤️`);
+  function feedDog() {
+    if (dogFed) {
+      showMessage(`${dogName} has already been fed today.`);
       return;
     }
 
-    setFedToday(true);
-
+    setPoints((p) => p + 5);
+    setDogFed(true);
     localStorage.setItem(
-      "greenpulse_fed_date",
+      "greenpulse_dog_fed",
       new Date().toDateString()
     );
 
-    setPoints((p) => p + 25);
+    showMessage(`${dogName} enjoyed the meal. +5 Green Points`);
+  }
 
-    setGardenBloom((b) => Math.min(100, b + 10));
-
-    say(
-      `${dogName} loved the food! +25 Green Points 🌱`
-    );
-  };
-
-  /* ----------------------------------------------------------
-     FEED FOREST
-  ---------------------------------------------------------- */
-
-  const feedForest = () => {
-    setPoints((p) => p + 10);
-
-    setGardenBloom((b) => Math.min(100, b + 5));
-
-    say("You cared for the forest. +10 Green Points 🌿");
-  };
-
-  /* ----------------------------------------------------------
-     PLANT TREE
-  ---------------------------------------------------------- */
-
-  const plantTree = () => {
-    if (points < 30) {
-      say("You need 30 Green Points to grow another tree.");
-      return;
-    }
-
-    setPoints((p) => p - 30);
-
-    setTrees((t) => t + 1);
-
-    say("A new tree has grown in your forest! 🌳");
-  };
-
-  /* ----------------------------------------------------------
-     DOG NAME
-  ---------------------------------------------------------- */
-
-  const saveDogName = () => {
-    const clean = dogName.trim() || "Buddy";
-
-    setDogName(clean);
-
-    localStorage.setItem(
-      "greenpulse_dog_name",
-      clean
-    );
-
-    setEditingDog(false);
-
-    say(`Meet ${clean}, your forest companion! 🐕`);
-  };
-
-  /* ----------------------------------------------------------
-     CAVE
-  ---------------------------------------------------------- */
-
-  const enterCave = () => {
-    setCaveOpen(true);
-    say("You entered the hidden cave...");
-  };
-
-  /* ----------------------------------------------------------
-     LION
-  ---------------------------------------------------------- */
-
-  const wakeLion = () => {
+  function wakeLion() {
     setLionAwake(true);
+    showMessage("The lion noticed you and slowly moved deeper into the forest.");
+  }
 
-    setPoints((p) => p + 5);
-
-    say(
-      "The sleeping lion slowly opened its eyes... 🦁"
+  function toggleSound() {
+    setSoundOn((value) => !value);
+    showMessage(
+      !soundOn
+        ? "Ambient sound enabled when supported by your browser."
+        : "Ambient sound muted."
     );
-  };
-
-  /* ----------------------------------------------------------
-     PARTICLES
-  ---------------------------------------------------------- */
-
-  const leaves = Array.from({ length: 45 });
-
-  const butterflies = Array.from({ length: 8 });
-
-  const birds = Array.from({ length: 12 });
-
-  const rain = Array.from({ length: 90 });
-
-  const snow = Array.from({ length: 70 });
-
-  /* ----------------------------------------------------------
-     CLASS
-  ---------------------------------------------------------- */
-
-  const sceneClass = [
-    "forest-game",
-    `season-${season.toLowerCase()}`,
-    `weather-${weather.toLowerCase()}`,
-    caveOpen ? "cave-mode" : "",
-    campfire ? "campfire-mode" : "",
-  ].join(" ");
+  }
 
   return (
-    <div className={sceneClass}>
+    <div
+      className={`forest-app ${atmosphere} weather-${weather}`}
+      style={{
+        "--season-accent": seasonData.accent,
+        "--sky": seasonData.sky,
+      }}
+    >
+      {/* =========================================================
+          GREEN PULSE INTRO — ONLY AT THE START
+      ========================================================= */}
 
-      {/* =====================================================
-          ONLINE AUDIO
-      ===================================================== */}
+      <section className="forest-intro">
+        <div className="intro-content">
+          <div className="brand-mark">
+            <div className="brand-symbol">GP</div>
 
-      <audio
-        ref={audioRef}
-        src={MEDIA.forestSound}
-        loop
-        preload="none"
-        onError={() => setSound(false)}
-      />
-
-      {/* =====================================================
-          SKY
-      ===================================================== */}
-
-      <div className="world-sky" />
-
-      <div className="sun-orb" />
-
-      <div className="moon-orb" />
-
-      <div className="stars-layer">
-        {Array.from({ length: 75 }).map((_, i) => (
-          <i key={i} />
-        ))}
-      </div>
-
-      {/* =====================================================
-          BACKGROUND IMAGE
-      ===================================================== */}
-
-      <SafeImage
-        src={MEDIA.forest}
-        className="remote-forest"
-      />
-
-      <div className="cinematic-fog" />
-
-      <div className="light-rays" />
-
-      {/* =====================================================
-          TREES
-      ===================================================== */}
-
-      <div className="forest-trees">
-
-        {Array.from({
-          length: Math.min(34, 10 + trees),
-        }).map((_, i) => (
-          <div
-            className={`game-tree ${
-              i % 3 === 0 ? "large" : ""
-            }`}
-            key={i}
-            style={{
-              "--tree-x": `${(i * 3.7) % 100}%`,
-              "--tree-depth": `${
-                0.55 + ((i * 17) % 50) / 100
-              }`,
-              "--tree-delay": `${(i % 6) * 0.2}s`,
-            }}
-          >
-            <div className="tree-shadow" />
-
-            <div className="tree-trunk" />
-
-            <div className="tree-crown crown-a" />
-            <div className="tree-crown crown-b" />
-            <div className="tree-crown crown-c" />
+            <div>
+              <div className="brand-name">GREEN PULSE</div>
+              <div className="brand-subtitle">
+                Digital Green Challenge 2026
+              </div>
+            </div>
           </div>
-        ))}
 
-      </div>
+          <h1>Enter the Living Forest</h1>
 
-      {/* =====================================================
-          GROUND
-      ===================================================== */}
+          <p>
+            A digital ecosystem where your sustainable actions become
+            something you can see, explore and protect.
+          </p>
 
-      <div className="forest-ground">
+          <button
+            className="enter-button"
+            onClick={() =>
+              document
+                .getElementById("forest-world")
+                ?.scrollIntoView({ behavior: "smooth" })
+            }
+          >
+            Enter the forest
+            <span>↓</span>
+          </button>
+        </div>
+      </section>
 
-        <div className="ground-path" />
+      {/* =========================================================
+          MAIN WORLD
+      ========================================================= */}
 
-        <div className="grass-field">
+      <section
+        id="forest-world"
+        className={`forest-world ${activePlace}`}
+      >
+        <div className="world-sky" />
 
-          {Array.from({ length: 140 }).map((_, i) => (
-            <i
+        <div className="distant-mountains" />
+
+        <div className="tree-line tree-line-back">
+          <span>🌲</span>
+          <span>🌲</span>
+          <span>🌲</span>
+          <span>🌲</span>
+          <span>🌲</span>
+          <span>🌲</span>
+          <span>🌲</span>
+          <span>🌲</span>
+        </div>
+
+        <div className="forest-depth">
+          {Array.from({ length: Math.min(treeCount, 14) }).map((_, i) => (
+            <div
+              className="generated-tree"
               key={i}
               style={{
-                left: `${(i * 7.7) % 100}%`,
-                height: `${10 + (i % 6) * 5}px`,
-                animationDelay: `${(i % 8) / 3}s`,
+                left: `${5 + ((i * 17) % 91)}%`,
+                transform: `scale(${0.55 + ((i * 13) % 45) / 100})`,
               }}
-            />
+            >
+              <div className="tree-crown" />
+              <div className="tree-trunk" />
+            </div>
           ))}
-
         </div>
 
-      </div>
+        {/* Weather */}
 
-      {/* =====================================================
-          BUTTERFLIES
-      ===================================================== */}
+        {weather === "rain" && (
+          <div className="rain-layer">
+            {Array.from({ length: 90 }).map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  left: `${(i * 19) % 100}%`,
+                  animationDelay: `${(i % 13) / 10}s`,
+                }}
+              />
+            ))}
+          </div>
+        )}
 
-      <div className="butterfly-layer">
+        {weather === "snow" && (
+          <div className="snow-layer">
+            {Array.from({ length: 60 }).map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  left: `${(i * 31) % 100}%`,
+                  animationDelay: `${(i % 11) / 2}s`,
+                }}
+              >
+                •
+              </span>
+            ))}
+          </div>
+        )}
 
-        {butterflies.map((_, i) => (
-          <div
-            className="real-butterfly"
-            key={i}
-            style={{
-              "--bx": `${8 + i * 11}%`,
-              "--by": `${35 + (i % 5) * 7}%`,
-              "--bd": `${8 + i * 1.2}s`,
-            }}
+        {weather === "fog" && <div className="fog-layer" />}
+
+        {/* =====================================================
+            LEFT FOREST CONTROL PANEL
+        ===================================================== */}
+
+        <aside className={`forest-menu ${menuOpen ? "open" : "closed"}`}>
+          <button
+            className="menu-close"
+            onClick={() => setMenuOpen(false)}
           >
-            <span>🦋</span>
-          </div>
-        ))}
+            ×
+          </button>
 
-      </div>
-
-      {/* =====================================================
-          BIRDS
-      ===================================================== */}
-
-      <div className="bird-layer">
-
-        {birds.map((_, i) => (
-          <span
-            key={i}
-            className="real-bird"
-            style={{
-              "--bird-y": `${13 + (i % 5) * 7}%`,
-              "--bird-delay": `${i * 1.7}s`,
-              "--bird-speed": `${18 + i}s`,
-            }}
-          >
-            🐦
-          </span>
-        ))}
-
-      </div>
-
-      {/* =====================================================
-          BIRD NESTS
-      ===================================================== */}
-
-      <div className="bird-nests">
-
-        <button
-          className="nest nest-one"
-          onClick={() =>
-            say(
-              "A little nest is hidden between the branches. 🪺"
-            )
-          }
-        >
-          🪺
-        </button>
-
-        <button
-          className="nest nest-two"
-          onClick={() =>
-            say(
-              "You found another bird nest! The forest is growing."
-            )
-          }
-        >
-          🪺
-        </button>
-
-      </div>
-
-      {/* =====================================================
-          SIDE WALL / MENU
-      ===================================================== */}
-
-      <aside
-        className={`forest-sidebar ${
-          menuOpen ? "open" : "closed"
-        }`}
-      >
-
-        <div className="sidebar-logo">
-          <span>🌿</span>
-          <div>
-            <strong>GREEN PULSE</strong>
-            <small>FOREST WORLD</small>
-          </div>
-        </div>
-
-        <button
-          className="sidebar-item active"
-          onClick={() => {
-            setCaveOpen(false);
-            say("You are exploring the forest.");
-          }}
-        >
-          <span>🌲</span>
-          Forest
-        </button>
-
-        <button
-          className="sidebar-item"
-          onClick={() => {
-            setWeather("Night");
-            say("Night mode activated. 🌙");
-          }}
-        >
-          <span>🌙</span>
-          Night
-        </button>
-
-        <button
-          className="sidebar-item"
-          onClick={() => setCampfire((v) => !v)}
-        >
-          <span>🔥</span>
-          Campfire
-        </button>
-
-        <button
-          className="sidebar-item"
-          onClick={enterCave}
-        >
-          <span>🪨</span>
-          Caves
-        </button>
-
-        <button
-          className="sidebar-item"
-          onClick={() => {
-            document
-              .querySelector(".growth-section")
-              ?.scrollIntoView({
-                behavior: "smooth",
-              });
-          }}
-        >
-          <span>🌱</span>
-          My Garden
-        </button>
-
-        <div className="sidebar-divider" />
-
-        <div className="sidebar-stat">
-          <small>GREEN POINTS</small>
-          <strong>{points}</strong>
-        </div>
-
-        <div className="sidebar-stat">
-          <small>FOREST LEVEL</small>
-          <strong>{level}</strong>
-        </div>
-
-      </aside>
-
-      <button
-        className={`wall-menu-button ${
-          menuOpen ? "hide-button" : ""
-        }`}
-        onClick={() => setMenuOpen(true)}
-        aria-label="Open forest menu"
-      >
-        <span />
-        <span />
-        <span />
-      </button>
-
-      <button
-        className="sidebar-close"
-        onClick={() => setMenuOpen(false)}
-      >
-        ‹
-      </button>
-
-      {/* =====================================================
-          TOP HUD
-      ===================================================== */}
-
-      <header className="forest-topbar">
-
-        <div className="top-title">
-          <span className="green-pulse-dot" />
-          <div>
-            <strong>GREEN PULSE</strong>
-            <small>LIVING FOREST</small>
-          </div>
-        </div>
-
-        <div className="points-display">
-          <span>🌱</span>
-          <strong>{points}</strong>
-          <small>POINTS</small>
-        </div>
-
-        <div className="top-actions">
+          <div className="menu-heading">THE FOREST</div>
 
           <button
-            className={sound ? "active" : ""}
-            onClick={toggleSound}
+            className={activePlace === "forest" ? "active" : ""}
+            onClick={() => setActivePlace("forest")}
           >
-            {sound ? "🔊" : "🔇"}
+            <span>⌂</span>
+            Forest
           </button>
 
           <button
-            onClick={() => setCampfire((v) => !v)}
+            onClick={() => {
+              setActivePlace("garden");
+              document
+                .getElementById("garden")
+                ?.scrollIntoView({ behavior: "smooth" });
+            }}
           >
-            🔥
+            <span>♧</span>
+            My Garden
           </button>
 
           <button
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => {
+              setCaveOpen(true);
+            }}
+          >
+            <span>◈</span>
+            Cave
+          </button>
+
+          <button
+            onClick={() => {
+              setCampfire(true);
+              setActivePlace("campfire");
+            }}
+          >
+            <span>◉</span>
+            Night Camp
+          </button>
+
+          <div className="menu-divider" />
+
+          <div className="menu-heading">ATMOSPHERE</div>
+
+          <div className="control-label">Season</div>
+
+          <div className="choice-grid">
+            {Object.keys(seasons).map((key) => (
+              <button
+                key={key}
+                className={season === key ? "selected" : ""}
+                onClick={() => setSeason(key)}
+              >
+                {seasons[key].name}
+              </button>
+            ))}
+          </div>
+
+          <div className="control-label">Weather</div>
+
+          <div className="choice-grid">
+            {weatherList.map((item) => (
+              <button
+                key={item}
+                className={weather === item ? "selected" : ""}
+                onClick={() => setWeather(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+
+          <button className="sound-button" onClick={toggleSound}>
+            {soundOn ? "◉ Sound on" : "○ Sound off"}
+          </button>
+        </aside>
+
+        {!menuOpen && (
+          <button
+            className="menu-tab"
+            onClick={() => setMenuOpen(true)}
           >
             ☰
           </button>
+        )}
 
+        {/* =====================================================
+            HUD
+        ===================================================== */}
+
+        <div className="world-hud">
+          <div>
+            <span className="hud-label">GREEN POINTS</span>
+            <strong>{points}</strong>
+          </div>
+
+          <div>
+            <span className="hud-label">TREES GROWN</span>
+            <strong>{treeCount}</strong>
+          </div>
+
+          <div>
+            <span className="hud-label">TIME</span>
+            <strong>
+              {timeMode === "day"
+                ? "DAY"
+                : timeMode === "sunset"
+                ? "SUNSET"
+                : "NIGHT"}
+            </strong>
+          </div>
         </div>
 
-      </header>
+        {/* =====================================================
+            DOG
+        ===================================================== */}
 
-      {/* =====================================================
-          MAIN HERO
-      ===================================================== */}
+        <div className="animal dog">
+          <div className="dog-shadow" />
 
-      {!caveOpen && (
-        <main className="forest-content">
+          <SafeImage
+            src="https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=900&q=85"
+            alt="Dog"
+          />
 
-          <section className="forest-hero">
+          <div className="animal-name">
+            {dogName}
+          </div>
 
-            <span className="hero-kicker">
-              YOUR DIGITAL WILDERNESS
-            </span>
-
-            <h1>
-              Grow your
-              <span> forest.</span>
-            </h1>
-
-            <p>
-              Every green action can make this world
-              more alive.
-            </p>
-
-            <div className="hero-message">
-              <span>●</span>
-              {message}
-            </div>
-
-          </section>
-
-          {/* =================================================
-              INTERACTION DECK
-          ================================================= */}
-
-          <section className="interaction-deck">
-
-            <div className="interaction-card dog-card">
-
-              <div className="animal-image-wrap">
-
-                <SafeImage
-                  src={MEDIA.dog}
-                  className="dog-photo"
+          <div className="animal-actions">
+            {editingDog ? (
+              <>
+                <input
+                  value={dogName}
+                  onChange={(e) => setDogName(e.target.value.slice(0, 16))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") setEditingDog(false);
+                  }}
+                  autoFocus
                 />
 
-                <div className="dog-fallback">
-                  🐕
-                </div>
-
-                <div className="animal-glow" />
-
-              </div>
-
-              <div className="animal-info">
-
-                <span>YOUR FOREST COMPANION</span>
-
-                {editingDog ? (
-                  <div className="dog-name-edit">
-
-                    <input
-                      value={dogName}
-                      onChange={(e) =>
-                        setDogName(e.target.value)
-                      }
-                      autoFocus
-                    />
-
-                    <button onClick={saveDogName}>
-                      ✓
-                    </button>
-
-                  </div>
-                ) : (
-                  <h2>
-                    {dogName}
-                    <button
-                      onClick={() =>
-                        setEditingDog(true)
-                      }
-                    >
-                      ✎
-                    </button>
-                  </h2>
-                )}
-
-                <p>
-                  {fedToday
-                    ? `${dogName} is happy and full.`
-                    : `${dogName} is waiting for today's meal.`}
-                </p>
-
-                <button
-                  className="feed-button"
-                  onClick={feedDog}
-                  disabled={fedToday}
-                >
-                  {fedToday
-                    ? "✓ FED TODAY"
-                    : "🍎 FEED COMPANION +25"}
+                <button onClick={() => setEditingDog(false)}>
+                  Save
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setEditingDog(true)}>
+                  Rename
                 </button>
 
-              </div>
-
-            </div>
-
-            <div className="interaction-card forest-care-card">
-
-              <div className="care-icon">
-                🌳
-              </div>
-
-              <div>
-                <span>CARE FOR FOREST</span>
-
-                <h2>
-                  {growthStage}
-                </h2>
-
-                <p>
-                  {trees} living trees are currently
-                  growing.
-                </p>
-
-                <button
-                  className="feed-button"
-                  onClick={feedForest}
-                >
-                  💧 WATER FOREST +10
+                <button onClick={feedDog}>
+                  {dogFed ? "Fed today" : "Feed +5"}
                 </button>
-
-              </div>
-
-            </div>
-
-          </section>
-
-          {/* =================================================
-              WORLD CONTROLS
-          ================================================= */}
-
-          <section className="world-controls">
-
-            <div className="control-panel">
-
-              <div className="control-heading">
-                <span>SEASON</span>
-                <small>
-                  {SEASONS[season].description}
-                </small>
-              </div>
-
-              <div className="control-options">
-
-                {Object.entries(SEASONS).map(
-                  ([name, data]) => (
-                    <button
-                      key={name}
-                      className={
-                        season === name
-                          ? "selected"
-                          : ""
-                      }
-                      onClick={() => {
-                        setSeason(name);
-                        say(
-                          `${name} has arrived in the forest. ${data.icon}`
-                        );
-                      }}
-                    >
-                      <span>{data.icon}</span>
-                      {name}
-                    </button>
-                  )
-                )}
-
-              </div>
-
-            </div>
-
-            <div className="control-panel">
-
-              <div className="control-heading">
-                <span>WEATHER</span>
-                <small>
-                  Change the atmosphere.
-                </small>
-              </div>
-
-              <div className="control-options">
-
-                {Object.entries(WEATHER).map(
-                  ([name, icon]) => (
-                    <button
-                      key={name}
-                      className={
-                        weather === name
-                          ? "selected"
-                          : ""
-                      }
-                      onClick={() => {
-                        setWeather(name);
-                        say(
-                          `${name} weather activated. ${icon}`
-                        );
-                      }}
-                    >
-                      <span>{icon}</span>
-                      {name}
-                    </button>
-                  )
-                )}
-
-              </div>
-
-            </div>
-
-          </section>
-
-          {/* =================================================
-              CAMPFIRE
-          ================================================= */}
-
-          {campfire && (
-            <section className="campfire-section">
-
-              <div className="campfire-scene">
-
-                <div className="campfire-glow" />
-
-                <div className="fire">
-
-                  <i />
-                  <i />
-                  <i />
-
-                </div>
-
-                <div className="logs">
-                  <span />
-                  <span />
-                </div>
-
-              </div>
-
-              <div className="campfire-info">
-
-                <span>NIGHT FOREST</span>
-
-                <h2>
-                  Stay awhile.
-                </h2>
-
-                <p>
-                  A quiet digital campfire for studying,
-                  relaxing or simply listening to the forest.
-                </p>
-
-                <div className="campfire-player">
-                  <button
-                    onClick={toggleSound}
-                  >
-                    {sound ? "⏸" : "▶"}
-                  </button>
-
-                  <div>
-                    <small>FOREST AMBIENCE</small>
-                    <strong>
-                      {sound
-                        ? "PLAYING"
-                        : "PRESS PLAY"}
-                    </strong>
-                  </div>
-                </div>
-
-              </div>
-
-            </section>
-          )}
-
-          {/* =================================================
-              GROWTH SECTION
-          ================================================= */}
-
-          <section className="growth-section">
-
-            <div className="growth-header">
-
-              <div>
-                <span>YOUR WORLD</span>
-
-                <h2>
-                  Watch it grow.
-                </h2>
-
-                <p>
-                  Use Green Points to turn a tiny grove
-                  into a living sanctuary.
-                </p>
-              </div>
-
-              <div className="growth-level">
-                <small>LEVEL</small>
-                <strong>{level}</strong>
-              </div>
-
-            </div>
-
-            <div className="growth-progress">
-
-              <div className="progress-label">
-                <span>
-                  {points} POINTS
-                </span>
-
-                <span>
-                  NEXT GROWTH {nextGoal}
-                </span>
-              </div>
-
-              <div className="progress-track">
-                <div
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      (points % 100)
-                    )}%`,
-                  }}
-                />
-              </div>
-
-            </div>
-
-            <div className="garden-preview">
-
-              {Array.from({
-                length: Math.min(25, 5 + Math.floor(points / 40)),
-              }).map((_, i) => (
-                <div
-                  className="garden-tree"
-                  key={i}
-                  style={{
-                    left: `${5 + ((i * 17) % 90)}%`,
-                    bottom: `${5 + ((i * 13) % 18)}%`,
-                    transform: `scale(${
-                      0.55 + ((i * 23) % 60) / 100
-                    })`,
-                  }}
-                >
-                  🌳
-                </div>
-              ))}
-
-              {Array.from({
-                length: Math.min(
-                  18,
-                  Math.floor(points / 35)
-                ),
-              }).map((_, i) => (
-                <div
-                  className="garden-flower"
-                  key={`f${i}`}
-                  style={{
-                    left: `${8 + ((i * 21) % 84)}%`,
-                    bottom: `${3 + ((i * 9) % 14)}%`,
-                  }}
-                >
-                  {i % 2 ? "🌼" : "🌷"}
-                </div>
-              ))}
-
-              <div className="garden-title">
-                <span>{growthStage}</span>
-                <strong>
-                  {trees} TREES
-                </strong>
-              </div>
-
-            </div>
-
-            <button
-              className="plant-button"
-              onClick={plantTree}
-            >
-              🌱 GROW A NEW TREE — 30 POINTS
-            </button>
-
-          </section>
-
-          {/* =================================================
-              LION
-          ================================================= */}
-
-          <section className="wildlife-section">
-
-            <div className="sleeping-lion">
-
-              <div
-                className={`lion ${
-                  lionAwake ? "awake" : ""
-                }`}
-                onClick={wakeLion}
-              >
-                🦁
-              </div>
-
-              <div className="sleep-z">
-                {lionAwake ? "👀" : "Zzz..."}
-              </div>
-
-            </div>
-
-            <div className="wildlife-text">
-
-              <span>WILDLIFE DISCOVERY</span>
-
-              <h2>
-                {lionAwake
-                  ? "The lion is watching."
-                  : "Something is sleeping nearby..."}
-              </h2>
-
-              <p>
-                {lionAwake
-                  ? "You discovered a hidden resident of the forest."
-                  : "Approach carefully and wake it."}
-              </p>
-
-              <button
-                onClick={wakeLion}
-              >
-                {lionAwake
-                  ? "✓ DISCOVERED"
-                  : "👆 WAKE LION +5"}
-              </button>
-
-            </div>
-
-          </section>
-
-          {/* =================================================
-              CAVE ENTRY
-          ================================================= */}
-
-          <section className="cave-entry">
-
-            <div className="cave-art">
-
-              <div className="cave-mouth">
-
-                <div className="cave-eye">
-                  ✨
-                </div>
-
-              </div>
-
-            </div>
-
-            <div>
-
-              <span>HIDDEN LOCATION</span>
-
-              <h2>
-                The Whispering Cave
-              </h2>
-
-              <p>
-                Nobody knows what lives beyond the
-                entrance.
-              </p>
-
-              <button onClick={enterCave}>
-                ENTER CAVE →
-              </button>
-
-            </div>
-
-          </section>
-
-          <div className="forest-end">
-            <span>🌲</span>
-            <p>
-              The forest keeps growing when you leave.
-            </p>
+              </>
+            )}
           </div>
+        </div>
 
-        </main>
-      )}
+        {/* =====================================================
+            LION
+        ===================================================== */}
 
-      {/* =====================================================
-          CAVE WORLD
-      ===================================================== */}
+        <button
+          className={`lion ${lionAwake ? "awake" : ""}`}
+          onClick={wakeLion}
+          aria-label="Lion"
+        >
+          <SafeImage
+            src="https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=1000&q=85"
+            alt="Lion resting in the forest"
+          />
 
-      {caveOpen && (
-        <section className="cave-world">
+          <span>
+            {lionAwake ? "The lion walks away..." : "Sleeping"}
+          </span>
+        </button>
 
-          <button
-            className="cave-back"
-            onClick={() => setCaveOpen(false)}
-          >
-            ← EXIT CAVE
-          </button>
+        {/* =====================================================
+            BIRDS
+        ===================================================== */}
 
-          <div className="cave-stars">
-            ✦　　✧　　 ✦　　　✧
-          </div>
+        <div className="bird bird-one">⌁</div>
+        <div className="bird bird-two">⌁</div>
+        <div className="bird bird-three">⌁</div>
 
-          <div className="cave-title">
+        {/* =====================================================
+            BUTTERFLIES
+        ===================================================== */}
 
-            <span>HIDDEN WORLD</span>
+        <div className="butterfly butterfly-one">🦋</div>
+        <div className="butterfly butterfly-two">🦋</div>
 
-            <h1>
-              The Whispering Cave
-            </h1>
+        {/* =====================================================
+            GROUND
+        ===================================================== */}
 
-            <p>
-              A secret place beneath your forest.
-            </p>
-
-          </div>
-
-          <div className="cave-chamber">
-
-            <div className="stalactite s1" />
-            <div className="stalactite s2" />
-            <div className="stalactite s3" />
-
-            <div className="cave-water">
-              ✦ ✦ ✦ ✦ ✦
-            </div>
-
-            <button
-              className="cave-crystal"
-              onClick={() => {
-                setPoints((p) => p + 15);
-                say("You discovered a crystal! +15 points.");
+        <div className="forest-ground">
+          {Array.from({ length: Math.min(flowerCount, 25) }).map((_, i) => (
+            <span
+              className="flower"
+              key={i}
+              style={{
+                left: `${(i * 23) % 98}%`,
+                bottom: `${3 + (i % 7)}%`,
               }}
             >
-              💎
-              <small>
-                DISCOVER
-              </small>
-            </button>
+              ✦
+            </span>
+          ))}
+        </div>
 
-            <div className="cave-creature">
-              🦇
-            </div>
+        {/* =====================================================
+            INTERACTION PROMPT
+        ===================================================== */}
 
+        <div className="world-message">
+          {message || "Explore quietly. The forest is alive."}
+        </div>
+      </section>
+
+      {/* =========================================================
+          GARDEN
+      ========================================================= */}
+
+      <section id="garden" className="garden-section">
+        <div className="section-kicker">YOUR ECOLOGICAL FOOTPRINT</div>
+
+        <h2>Watch your garden grow.</h2>
+
+        <p>
+          Every Green Point contributes to the digital ecosystem.
+          As your activity grows, so does the landscape around you.
+        </p>
+
+        <div className="garden-ground">
+          {Array.from({ length: Math.min(treeCount + 4, 18) }).map(
+            (_, i) => (
+              <div
+                className="garden-tree"
+                key={i}
+                style={{
+                  left: `${5 + ((i * 29) % 90)}%`,
+                  animationDelay: `${i * 0.08}s`,
+                }}
+              >
+                <div />
+                <span />
+              </div>
+            )
+          )}
+
+          {Array.from({ length: Math.min(flowerCount, 35) }).map(
+            (_, i) => (
+              <i
+                key={i}
+                style={{
+                  left: `${(i * 17) % 100}%`,
+                  bottom: `${5 + (i % 8)}%`,
+                }}
+              />
+            )
+          )}
+        </div>
+
+        <div className="garden-stats">
+          <div>
+            <strong>{points}</strong>
+            <span>Green Points</span>
           </div>
 
+          <div>
+            <strong>{treeCount}</strong>
+            <span>Digital Trees</span>
+          </div>
+
+          <div>
+            <strong>{flowerCount}</strong>
+            <span>Plants</span>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================
+          CAMPFIRE
+      ========================================================= */}
+
+      {campfire && (
+        <section className="camp-section">
+          <button
+            className="camp-close"
+            onClick={() => {
+              setCampfire(false);
+              setActivePlace("forest");
+            }}
+          >
+            Leave camp
+          </button>
+
+          <div className="moon" />
+
+          <div className="camp-scene">
+            <div className="campfire">
+              <div className="flame flame-a" />
+              <div className="flame flame-b" />
+              <div className="flame flame-c" />
+
+              <div className="logs">
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+          </div>
+
+          <div className="camp-copy">
+            <span>QUIET HOURS</span>
+            <h2>The forest after dark.</h2>
+            <p>
+              Slow down. Watch the fire. Let the forest become still.
+            </p>
+          </div>
         </section>
       )}
 
-      {/* =====================================================
-          WEATHER PARTICLES
-      ===================================================== */}
+      {/* =========================================================
+          CAVE
+      ========================================================= */}
 
-      {weather === "Rain" ||
-      weather === "Storm" ? (
-        <div className="rain-layer">
-          {rain.map((_, i) => (
-            <i
-              key={i}
-              style={{
-                left: `${(i * 13.7) % 100}%`,
-                animationDelay: `${(i % 17) / 4}s`,
-              }}
-            />
-          ))}
-        </div>
-      ) : null}
-
-      {weather === "Snow" && (
-        <div className="snow-layer">
-          {snow.map((_, i) => (
-            <i
-              key={i}
-              style={{
-                left: `${(i * 11.3) % 100}%`,
-                animationDelay: `${(i % 13) / 3}s`,
-              }}
+      {caveOpen && (
+        <div className="cave-overlay">
+          <div className="cave">
+            <button
+              className="cave-close"
+              onClick={() => setCaveOpen(false)}
             >
-              ❄
-            </i>
-          ))}
+              ×
+            </button>
+
+            <div className="cave-light" />
+
+            <div className="crystal crystal-a" />
+            <div className="crystal crystal-b" />
+            <div className="crystal crystal-c" />
+
+            <div className="bat">⌁</div>
+
+            <div className="cave-content">
+              <span>HIDDEN LOCATION</span>
+              <h2>The Silent Cave</h2>
+              <p>
+                Some parts of the ecosystem reveal themselves only
+                when you slow down enough to explore.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* =====================================================
-          FINAL VIGNETTE
-      ===================================================== */}
+      {/* =========================================================
+          GREEN PULSE OUTRO — ONLY AT THE END
+      ========================================================= */}
 
-      <div className="forest-vignette" />
+      <section className="forest-outro">
+        <div className="outro-logo">GP</div>
 
+        <div className="outro-brand">GREEN PULSE</div>
+
+        <h2>
+          Small actions.
+          <br />
+          A living planet.
+        </h2>
+
+        <p>
+          GreenPulse turns everyday environmental choices into
+          something visible, measurable and meaningful.
+        </p>
+
+        <div className="outro-line" />
+
+        <span className="copyright">
+          GREEN PULSE CSEAIML • Digital Green Challenge 2026
+        </span>
+      </section>
     </div>
   );
 }
-
-export default Forest;
