@@ -1,1028 +1,2142 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import "./AdminDashboard.css";
+import {
+  getToken,
+  getUser,
+} from "./auth.js";
 
-const API_BASE = "https://greenpulse-web-tc0g.onrender.com";
+const API_BASE =
+  "https://greenpulse-web-tc0g.onrender.com";
 
-function formatDate(value) {
-  if (!value) return "—";
+const NAV_ITEMS = [
+  {
+    id: "overview",
+    icon: "◈",
+    label: "Overview",
+  },
+  {
+    id: "users",
+    icon: "♙",
+    label: "Users",
+  },
+  {
+    id: "calculations",
+    icon: "⌁",
+    label: "Calculations",
+  },
+  {
+    id: "reviews",
+    icon: "★",
+    label: "Reviews",
+  },
+  {
+    id: "activity",
+    icon: "◌",
+    label: "Activity",
+  },
+];
 
-  try {
-    return new Date(value).toLocaleString("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return String(value);
-  }
-}
-
-function number(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function Stat({ icon, label, value, detail }) {
-  return (
-    <div className="admin-stat">
-      <div className="admin-stat-icon">{icon}</div>
-
-      <div className="admin-stat-content">
-        <span>{label}</span>
-        <strong>{value}</strong>
-        {detail && <small>{detail}</small>}
-      </div>
-    </div>
-  );
-}
-
-export default function AdminDashboard() {
+function AdminDashboard() {
   const navigate = useNavigate();
 
-  const token = localStorage.getItem("greenpulse_token");
+  const token = getToken();
+  const storedUser = getUser();
 
-  const [admin, setAdmin] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [calculations, setCalculations] = useState([]);
-  const [activity, setActivity] = useState([]);
+  const [admin, setAdmin] =
+    useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [section, setSection] =
+    useState("overview");
 
-  const [search, setSearch] = useState("");
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [userAnalysis, setUserAnalysis] = useState(null);
+  const [stats, setStats] =
+    useState(null);
 
-  const [activeSection, setActiveSection] = useState("overview");
+  const [users, setUsers] =
+    useState([]);
+
+  const [
+    calculations,
+    setCalculations,
+  ] = useState([]);
+
+  const [reviews, setReviews] =
+    useState([]);
+
+  const [activity, setActivity] =
+    useState(null);
+
+  const [
+    selectedUser,
+    setSelectedUser,
+  ] = useState(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [
+    sectionLoading,
+    setSectionLoading,
+  ] = useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [search, setSearch] =
+    useState("");
+
+  const [
+    userSearch,
+    setUserSearch,
+  ] = useState("");
+
+  const [notice, setNotice] =
+    useState("");
 
   const authHeaders = useMemo(
     () => ({
-      Authorization: `Bearer ${token || ""}`,
-      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type":
+        "application/json",
     }),
     [token]
   );
 
-  const adminFetch = useCallback(
-    async (url, options = {}) => {
-      const response = await fetch(url, {
+  const api = async (
+    path,
+    options = {}
+  ) => {
+    const response = await fetch(
+      `${API_BASE}${path}`,
+      {
         ...options,
         headers: {
           ...authHeaders,
           ...(options.headers || {}),
         },
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("ADMIN_ACCESS_DENIED");
       }
+    );
 
-      if (!response.ok) {
-        let message = "Admin request failed.";
+    let data = {};
 
-        try {
-          const data = await response.json();
-          message = data.detail || message;
-        } catch {
-          // Ignore invalid JSON.
-        }
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
 
-        throw new Error(message);
-      }
+    if (!response.ok) {
+      throw new Error(
+        data.detail ||
+          data.message ||
+          `Request failed (${response.status})`
+      );
+    }
 
-      return response.json();
-    },
-    [authHeaders]
-  );
+    return data;
+  };
 
-  const loadAdmin = useCallback(async () => {
+  const loadStats = async () => {
+    const data = await api(
+      `/api/admin/stats?token=${encodeURIComponent(
+        token
+      )}`
+    );
+
+    setStats(data);
+  };
+
+  const loadUsers = async () => {
+    const data = await api(
+      `/api/admin/users?token=${encodeURIComponent(
+        token
+      )}`
+    );
+
+    setUsers(data.users || []);
+  };
+
+  const loadReviews = async () => {
+    const data = await api(
+      `/api/admin/reviews?token=${encodeURIComponent(
+        token
+      )}`
+    );
+
+    setReviews(
+      data.reviews || []
+    );
+  };
+
+  const loadCalculations =
+    async () => {
+      const data = await api(
+        `/api/admin/calculations?token=${encodeURIComponent(
+          token
+        )}`
+      );
+
+      setCalculations(
+        data.calculations || []
+      );
+    };
+
+  const loadActivity =
+    async () => {
+      const data = await api(
+        `/api/admin/activity?token=${encodeURIComponent(
+          token
+        )}`
+      );
+
+      setActivity(data);
+    };
+
+  const loadAdmin = async () => {
     if (!token) {
       navigate("/auth");
       return;
     }
 
     try {
+      setLoading(true);
       setError("");
 
-      const me = await adminFetch(
-        `${API_BASE}/api/admin/me?token=${encodeURIComponent(token)}`
-      );
-
-      if (!me?.is_admin && me?.role !== "admin") {
-        throw new Error("ADMIN_ACCESS_DENIED");
-      }
-
-      setAdmin(me);
-
-      const [
-        statsData,
-        usersData,
-        reviewsData,
-        calculationsData,
-        activityData,
-      ] = await Promise.all([
-        adminFetch(`${API_BASE}/api/admin/stats?token=${encodeURIComponent(token)}`),
-        adminFetch(`${API_BASE}/api/admin/users?token=${encodeURIComponent(token)}`),
-        adminFetch(`${API_BASE}/api/admin/reviews?token=${encodeURIComponent(token)}`),
-        adminFetch(
-          `${API_BASE}/api/admin/calculations?token=${encodeURIComponent(token)}`
-        ),
-        adminFetch(
-          `${API_BASE}/api/admin/activity?token=${encodeURIComponent(token)}`
-        ),
-      ]);
-
-      setStats(statsData);
-      setUsers(Array.isArray(usersData) ? usersData : usersData?.users || []);
-      setReviews(
-        Array.isArray(reviewsData)
-          ? reviewsData
-          : reviewsData?.reviews || []
-      );
-      setCalculations(
-        Array.isArray(calculationsData)
-          ? calculationsData
-          : calculationsData?.calculations || []
-      );
-      setActivity(
-        Array.isArray(activityData)
-          ? activityData
-          : activityData?.activity || []
-      );
-    } catch (err) {
-      if (err.message === "ADMIN_ACCESS_DENIED") {
-        navigate("/dashboard");
-        return;
-      }
-
-      setError(err.message || "Could not load admin dashboard.");
-    } finally {
-      setLoading(false);
-    }
-  }, [adminFetch, navigate, token]);
-
-  useEffect(() => {
-    loadAdmin();
-  }, [loadAdmin]);
-
-  const openUser = async (user) => {
-    setSelectedUser(user);
-    setUserAnalysis(null);
-
-    try {
-      const data = await adminFetch(
-        `${API_BASE}/api/admin/users/${user.id}?token=${encodeURIComponent(
+      const data = await api(
+        `/api/admin/me?token=${encodeURIComponent(
           token
         )}`
       );
 
-      setUserAnalysis(data);
+      if (
+        !data.admin ||
+        data.admin.role !== "admin"
+      ) {
+        throw new Error(
+          "Administrator access is required."
+        );
+      }
+
+      setAdmin(data.admin);
+
+      await Promise.all([
+        loadStats(),
+        loadUsers(),
+        loadReviews(),
+        loadCalculations(),
+        loadActivity(),
+      ]);
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+
+      setError(
+        err.message ||
+          "Unable to load admin console."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
-  const changeAccountStatus = async (user) => {
-    const action =
-      user.account_status === "frozen"
-        ? "unfreeze"
-        : "freeze";
-
-    const confirmed = window.confirm(
-      `${action === "freeze" ? "Freeze" : "Unfreeze"} ${
-        user.username
-      }'s account?`
-    );
-
-    if (!confirmed) return;
+  const loadSection = async (
+    nextSection
+  ) => {
+    setSection(nextSection);
+    setNotice("");
+    setError("");
 
     try {
-      setBusy(true);
+      setSectionLoading(true);
 
-      await adminFetch(
-        `${API_BASE}/api/admin/users/${user.id}/${action}?token=${encodeURIComponent(
-          token
-        )}`,
-        {
-          method: "POST",
-        }
-      );
+      if (
+        nextSection ===
+        "overview"
+      ) {
+        await loadStats();
+      }
 
-      await loadAdmin();
+      if (
+        nextSection ===
+        "users"
+      ) {
+        await loadUsers();
+      }
 
-      if (selectedUser?.id === user.id) {
-        const refreshed = users.find((item) => item.id === user.id);
+      if (
+        nextSection ===
+        "calculations"
+      ) {
+        await loadCalculations();
+      }
 
-        if (refreshed) {
-          setSelectedUser({
-            ...refreshed,
-            account_status:
-              action === "freeze" ? "frozen" : "active",
-          });
-        }
+      if (
+        nextSection ===
+        "reviews"
+      ) {
+        await loadReviews();
+      }
+
+      if (
+        nextSection ===
+        "activity"
+      ) {
+        await loadActivity();
       }
     } catch (err) {
-      setError(err.message);
+      setError(
+        err.message ||
+          "Unable to refresh section."
+      );
     } finally {
-      setBusy(false);
+      setSectionLoading(false);
     }
   };
 
-  const filteredUsers = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  useEffect(() => {
+    loadAdmin();
 
-    if (!query) return users;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    return users.filter((user) =>
-      String(user.username || "")
-        .toLowerCase()
-        .includes(query)
+  const openUser =
+    async (userId) => {
+      try {
+        setNotice("");
+
+        setSelectedUser({
+          loading: true,
+          id: userId,
+        });
+
+        const data = await api(
+          `/api/admin/users/${userId}?token=${encodeURIComponent(
+            token
+          )}`
+        );
+
+        setSelectedUser(data);
+      } catch (err) {
+        setSelectedUser(null);
+
+        setError(
+          err.message ||
+            "Unable to load user analysis."
+        );
+      }
+    };
+
+  const changeUserStatus =
+    async (
+      userId,
+      status
+    ) => {
+      const action =
+        status === "frozen"
+          ? "freeze"
+          : "unfreeze";
+
+      const confirmed =
+        window.confirm(
+          status === "frozen"
+            ? "Freeze this account?\n\nThe account will remain stored, but active sessions will be invalidated."
+            : "Unfreeze this account?"
+        );
+
+      if (!confirmed) return;
+
+      try {
+        setNotice("");
+        setError("");
+
+        await api(
+          `/api/admin/users/${userId}/${action}?token=${encodeURIComponent(
+            token
+          )}`,
+          {
+            method: "POST",
+          }
+        );
+
+        setNotice(
+          status === "frozen"
+            ? "Account frozen successfully."
+            : "Account unfrozen successfully."
+        );
+
+        await loadUsers();
+
+        if (
+          selectedUser?.user?.id ===
+          userId
+        ) {
+          await openUser(
+            userId
+          );
+        }
+
+        await loadStats();
+      } catch (err) {
+        setError(
+          err.message ||
+            "Unable to change account status."
+        );
+      }
+    };
+
+  const filteredUsers =
+    users.filter((user) =>
+      user.username
+        ?.toLowerCase()
+        .includes(
+          userSearch
+            .trim()
+            .toLowerCase()
+        )
     );
-  }, [users, search]);
 
-  const totalUsers =
-    number(stats?.total_users) ||
-    number(stats?.users) ||
-    users.length;
+  const filteredCalculations =
+    calculations.filter(
+      (item) =>
+        item.username
+          ?.toLowerCase()
+          .includes(
+            search
+              .trim()
+              .toLowerCase()
+          )
+    );
 
-  const activeUsers =
-    number(stats?.active_users) ||
-    users.filter(
-      (user) => user.account_status !== "frozen"
-    ).length;
-
-  const frozenUsers =
-    number(stats?.frozen_users) ||
-    users.filter(
-      (user) => user.account_status === "frozen"
-    ).length;
+  const totalCarbon =
+    Number(
+      stats?.impact
+        ?.total_co2e || 0
+    );
 
   const totalPoints =
-    number(stats?.total_points) ||
-    users.reduce(
-      (sum, user) => sum + number(user.points),
-      0
+    Number(
+      stats?.impact
+        ?.total_points || 0
     );
 
-  const totalCalculations =
-    number(stats?.total_calculations) ||
-    users.reduce(
-      (sum, user) => sum + number(user.total_calculations),
-      0
+  const maxActivity =
+    Math.max(
+      ...(activity?.calculations ||
+        []
+      ).map(
+        (item) =>
+          Number(
+            item.count || 0
+          )
+      ),
+      1
     );
 
   if (loading) {
     return (
-      <div className="admin-page admin-loading">
-        <div>
-          <div className="admin-loading-orb">🛡️</div>
-          <h1>Loading Admin Console</h1>
-          <p>Connecting to GreenPulse control center...</p>
+      <main className="admin-page admin-loading-page">
+        <div className="admin-loading-card">
+          <div className="admin-loading-leaf">
+            🌱
+          </div>
+
+          <h1>
+            Opening Admin
+            Console
+          </h1>
+
+          <p>
+            Connecting to
+            GreenPulse
+            securely...
+          </p>
+
+          <div className="admin-loader" />
         </div>
-      </div>
+      </main>
     );
   }
 
   if (error && !admin) {
     return (
-      <div className="admin-page admin-loading">
-        <div>
-          <div className="admin-loading-orb">🔒</div>
-          <h1>Admin access required</h1>
-          <p>{error}</p>
+      <main className="admin-page admin-error-page">
+        <div className="admin-error-card">
+          <div className="admin-error-icon">
+            🛡️
+          </div>
 
-          <button
-            className="admin-primary-button"
-            onClick={() => navigate("/dashboard")}
-          >
-            Return to Dashboard
-          </button>
+          <span className="admin-eyebrow">
+            GREENPULSE SECURITY
+          </span>
+
+          <h1>
+            Admin access
+            required
+          </h1>
+
+          <p>
+            {error}
+          </p>
+
+          <div className="admin-error-actions">
+            <button
+              className="admin-primary-button"
+              type="button"
+              onClick={() =>
+                navigate(
+                  "/dashboard"
+                )
+              }
+            >
+              Back to Dashboard
+            </button>
+
+            <button
+              className="admin-secondary-button"
+              type="button"
+              onClick={
+                loadAdmin
+              }
+            >
+              Try Again
+            </button>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="admin-page">
-      <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <div className="admin-brand-mark">🌿</div>
-
-          <div>
-            <strong>GREEN<span>PULSE</span></strong>
-            <small>ADMIN CONSOLE</small>
-          </div>
-        </div>
-
-        <div className="admin-nav">
+    <main className="admin-page">
+      <div className="admin-shell">
+        <aside className="admin-sidebar">
           <button
-            className={activeSection === "overview" ? "active" : ""}
-            onClick={() => setActiveSection("overview")}
+            className="admin-brand"
+            type="button"
+            onClick={() =>
+              navigate(
+                "/dashboard"
+              )
+            }
           >
-            <span>◈</span>
-            Overview
+            <span className="admin-brand-mark">
+              🌱
+            </span>
+
+            <span>
+              <strong>
+                GREEN
+                <span>
+                  PULSE
+                </span>
+              </strong>
+
+              <small>
+                ADMIN CONSOLE
+              </small>
+            </span>
           </button>
 
-          <button
-            className={activeSection === "users" ? "active" : ""}
-            onClick={() => setActiveSection("users")}
-          >
-            <span>👥</span>
-            Users
-          </button>
-
-          <button
-            className={activeSection === "calculations" ? "active" : ""}
-            onClick={() => setActiveSection("calculations")}
-          >
-            <span>🧮</span>
-            Calculations
-          </button>
-
-          <button
-            className={activeSection === "reviews" ? "active" : ""}
-            onClick={() => setActiveSection("reviews")}
-          >
-            <span>💬</span>
-            Reviews
-          </button>
-
-          <button
-            className={activeSection === "activity" ? "active" : ""}
-            onClick={() => setActiveSection("activity")}
-          >
-            <span>⚡</span>
-            Activity
-          </button>
-        </div>
-
-        <div className="admin-sidebar-bottom">
-          <div className="admin-security-card">
-            <span>🛡️</span>
-            <div>
-              <strong>Protected area</strong>
-              <small>Role verified by backend</small>
-            </div>
+          <div className="admin-security-pill">
+            <span className="admin-status-dot" />
+            Administrator
+            verified
           </div>
 
-          <button
-            className="admin-user-dashboard"
-            onClick={() => navigate("/dashboard")}
-          >
-            ← User Dashboard
-          </button>
-        </div>
-      </aside>
+          <nav className="admin-nav">
+            <span className="admin-nav-title">
+              CONTROL CENTER
+            </span>
 
-      <main className="admin-main">
-        <header className="admin-header">
-          <div>
-            <span className="admin-kicker">GREENPULSE CONTROL CENTER</span>
-
-            <h1>
-              Admin <em>Dashboard</em>
-            </h1>
-
-            <p>
-              Monitor the platform, understand user activity,
-              and manage accounts.
-            </p>
-          </div>
-
-          <div className="admin-header-right">
-            <button
-              className="admin-refresh"
-              onClick={loadAdmin}
-              disabled={busy}
-            >
-              ↻ Refresh
-            </button>
-
-            <div className="admin-profile">
-              <div>🛡️</div>
-
-              <span>
-                <strong>{admin?.username || "Administrator"}</strong>
-                <small>Administrator</small>
-              </span>
-            </div>
-          </div>
-        </header>
-
-        {error && (
-          <div className="admin-alert">
-            ⚠️ {error}
-            <button onClick={() => setError("")}>×</button>
-          </div>
-        )}
-
-        {activeSection === "overview" && (
-          <>
-            <section className="admin-stat-grid">
-              <Stat
-                icon="👥"
-                label="Total Users"
-                value={totalUsers}
-                detail={`${activeUsers} active`}
-              />
-
-              <Stat
-                icon="🟢"
-                label="Active Accounts"
-                value={activeUsers}
-                detail="Currently available"
-              />
-
-              <Stat
-                icon="❄️"
-                label="Frozen Accounts"
-                value={frozenUsers}
-                detail="Restricted accounts"
-              />
-
-              <Stat
-                icon="⭐"
-                label="Points Generated"
-                value={totalPoints.toLocaleString()}
-                detail="Across all users"
-              />
-
-              <Stat
-                icon="🧮"
-                label="Calculations"
-                value={totalCalculations.toLocaleString()}
-                detail="Recorded footprints"
-              />
-
-              <Stat
-                icon="🌍"
-                label="Platform Status"
-                value="ONLINE"
-                detail="Database connected"
-              />
-            </section>
-
-            <section className="admin-grid-two">
-              <article className="admin-panel admin-activity-panel">
-                <div className="admin-panel-heading">
-                  <div>
-                    <span>LIVE PULSE</span>
-                    <h2>Recent Activity</h2>
-                  </div>
-
-                  <button
-                    onClick={() => setActiveSection("activity")}
-                  >
-                    View all →
-                  </button>
-                </div>
-
-                <div className="admin-activity-list">
-                  {activity.slice(0, 8).map((item, index) => (
-                    <div className="admin-activity" key={item.id || index}>
-                      <div className="admin-activity-icon">
-                        {item.type === "calculation"
-                          ? "🧮"
-                          : item.type === "challenge"
-                          ? "🎯"
-                          : "🌱"}
-                      </div>
-
-                      <div>
-                        <strong>
-                          {item.username ||
-                            item.name ||
-                            "GreenPulse user"}
-                        </strong>
-
-                        <small>
-                          {item.action ||
-                            item.type ||
-                            "Activity recorded"}
-                        </small>
-                      </div>
-
-                      <time>
-                        {formatDate(
-                          item.created_at ||
-                            item.completed_at ||
-                            item.date
-                        )}
-                      </time>
-                    </div>
-                  ))}
-
-                  {!activity.length && (
-                    <div className="admin-empty">
-                      No activity recorded yet.
-                    </div>
-                  )}
-                </div>
-              </article>
-
-              <article className="admin-panel admin-control-panel">
-                <div className="admin-panel-heading">
-                  <div>
-                    <span>CONTROL</span>
-                    <h2>Account Management</h2>
-                  </div>
-                </div>
-
-                <div className="admin-control-stat">
-                  <div>
-                    <strong>{activeUsers}</strong>
-                    <span>Active users</span>
-                  </div>
-
-                  <div>
-                    <strong>{frozenUsers}</strong>
-                    <span>Frozen users</span>
-                  </div>
-                </div>
-
+            {NAV_ITEMS.map(
+              (item) => (
                 <button
-                  className="admin-large-action"
-                  onClick={() => setActiveSection("users")}
-                >
-                  👥 Manage User Accounts
-                  <span>→</span>
-                </button>
-
-                <button
-                  className="admin-large-action"
+                  key={item.id}
+                  type="button"
+                  className={`admin-nav-item ${
+                    section ===
+                    item.id
+                      ? "active"
+                      : ""
+                  }`}
                   onClick={() =>
-                    setActiveSection("calculations")
+                    loadSection(
+                      item.id
+                    )
                   }
                 >
-                  🧮 Explore Carbon Data
-                  <span>→</span>
-                </button>
+                  <span className="admin-nav-icon">
+                    {item.icon}
+                  </span>
 
-                <button
-                  className="admin-large-action"
-                  onClick={() => setActiveSection("reviews")}
-                >
-                  💬 Review Community Feedback
-                  <span>→</span>
-                </button>
-              </article>
-            </section>
-          </>
-        )}
+                  <span>
+                    {item.label}
+                  </span>
 
-        {activeSection === "users" && (
-          <section className="admin-panel admin-users-panel">
-            <div className="admin-panel-heading admin-users-heading">
-              <div>
-                <span>ACCOUNT CENTER</span>
-                <h2>GreenPulse Users</h2>
+                  {section ===
+                    item.id && (
+                    <span className="admin-nav-arrow">
+                      →
+                    </span>
+                  )}
+                </button>
+              )
+            )}
+          </nav>
+
+          <div className="admin-sidebar-bottom">
+            <div className="admin-profile-mini">
+              <div className="admin-avatar">
+                {(
+                  admin?.username ||
+                  storedUser?.username ||
+                  "A"
+                )
+                  .charAt(0)
+                  .toUpperCase()}
               </div>
 
-              <div className="admin-user-search">
-                🔎
-                <input
-                  value={search}
-                  onChange={(event) =>
-                    setSearch(event.target.value)
+              <div>
+                <strong>
+                  {admin?.username ||
+                    storedUser?.username ||
+                    "Administrator"}
+                </strong>
+
+                <span>
+                  Administrator
+                </span>
+              </div>
+            </div>
+
+            <button
+              className="admin-back-button"
+              type="button"
+              onClick={() =>
+                navigate(
+                  "/dashboard"
+                )
+              }
+            >
+              ← Return to
+              GreenPulse
+            </button>
+          </div>
+        </aside>
+
+        <section className="admin-main">
+          <header className="admin-topbar">
+            <div>
+              <span className="admin-eyebrow">
+                GREENPULSE /
+                ADMIN
+              </span>
+
+              <h1>
+                {section ===
+                  "overview" &&
+                  "Control Center"}
+
+                {section ===
+                  "users" &&
+                  "User Management"}
+
+                {section ===
+                  "calculations" &&
+                  "Carbon Calculations"}
+
+                {section ===
+                  "reviews" &&
+                  "Community Reviews"}
+
+                {section ===
+                  "activity" &&
+                  "Activity Monitor"}
+              </h1>
+            </div>
+
+            <div className="admin-top-actions">
+              <div className="admin-live-badge">
+                <span />
+                LIVE
+              </div>
+
+              <button
+                className="admin-refresh-button"
+                type="button"
+                onClick={
+                  loadAdmin
+                }
+                title="Refresh admin data"
+              >
+                ↻
+              </button>
+            </div>
+          </header>
+
+          {(error ||
+            notice) && (
+            <div
+              className={`admin-alert ${
+                error
+                  ? "error"
+                  : "success"
+              }`}
+            >
+              <span>
+                {error
+                  ? "⚠"
+                  : "✓"}
+              </span>
+
+              <p>
+                {error ||
+                  notice}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setNotice("");
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {sectionLoading && (
+            <div className="admin-section-loading">
+              Updating data...
+            </div>
+          )}
+
+          {/* =================================================
+              OVERVIEW
+              ================================================= */}
+
+          {section ===
+            "overview" &&
+            stats && (
+              <div className="admin-content">
+                <div className="admin-welcome-card">
+                  <div>
+                    <span className="admin-card-kicker">
+                      ADMINISTRATOR
+                      VIEW
+                    </span>
+
+                    <h2>
+                      GreenPulse
+                      is growing.
+                    </h2>
+
+                    <p>
+                      Monitor users,
+                      carbon
+                      activity,
+                      challenges
+                      and
+                      community
+                      feedback
+                      from one
+                      place.
+                    </p>
+                  </div>
+
+                  <div className="admin-welcome-art">
+                    🌍
+                  </div>
+                </div>
+
+                <div className="admin-stat-grid">
+                  <StatCard
+                    icon="♙"
+                    label="Total Users"
+                    value={
+                      stats.users
+                        ?.total ||
+                      0
+                    }
+                    detail={`${stats.users?.active || 0} active`}
+                  />
+
+                  <StatCard
+                    icon="⌁"
+                    label="Calculations"
+                    value={
+                      stats.activity
+                        ?.calculations ||
+                      0
+                    }
+                    detail="saved footprints"
+                  />
+
+                  <StatCard
+                    icon="🎯"
+                    label="Challenges"
+                    value={
+                      stats.activity
+                        ?.challenges_completed ||
+                      0
+                    }
+                    detail="completed"
+                  />
+
+                  <StatCard
+                    icon="★"
+                    label="Reviews"
+                    value={
+                      stats.activity
+                        ?.reviews ||
+                      0
+                    }
+                    detail="community responses"
+                  />
+                </div>
+
+                <div className="admin-overview-grid">
+                  <div className="admin-panel">
+                    <div className="admin-panel-heading">
+                      <div>
+                        <span>
+                          IMPACT
+                        </span>
+
+                        <h3>
+                          GreenPulse
+                          totals
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="admin-impact-list">
+                      <ImpactRow
+                        label="Carbon tracked"
+                        value={`${totalCarbon.toFixed(
+                          2
+                        )} kg CO₂e`}
+                        icon="◒"
+                      />
+
+                      <ImpactRow
+                        label="Green Points"
+                        value={totalPoints.toLocaleString()}
+                        icon="✦"
+                      />
+
+                      <ImpactRow
+                        label="Active accounts"
+                        value={
+                          stats
+                            .users
+                            ?.active ||
+                          0
+                        }
+                        icon="●"
+                      />
+
+                      <ImpactRow
+                        label="Frozen accounts"
+                        value={
+                          stats
+                            .users
+                            ?.frozen ||
+                          0
+                        }
+                        icon="❄"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="admin-panel">
+                    <div className="admin-panel-heading">
+                      <div>
+                        <span>
+                          USERS
+                        </span>
+
+                        <h3>
+                          Account
+                          status
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="admin-status-visual">
+                      <div className="admin-status-ring">
+                        <strong>
+                          {stats.users
+                            ?.total ||
+                            0}
+                        </strong>
+
+                        <span>
+                          users
+                        </span>
+                      </div>
+
+                      <div className="admin-status-legend">
+                        <div>
+                          <i className="active-dot" />
+
+                          <span>
+                            Active
+                          </span>
+
+                          <strong>
+                            {stats
+                              .users
+                              ?.active ||
+                              0}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <i className="frozen-dot" />
+
+                          <span>
+                            Frozen
+                          </span>
+
+                          <strong>
+                            {stats
+                              .users
+                              ?.frozen ||
+                              0}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <i className="admin-dot" />
+
+                          <span>
+                            Admins
+                          </span>
+
+                          <strong>
+                            {stats
+                              .users
+                              ?.admins ||
+                              0}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="admin-panel">
+                  <div className="admin-panel-heading">
+                    <div>
+                      <span>
+                        RECENT
+                        USERS
+                      </span>
+
+                      <h3>
+                        Accounts
+                      </h3>
+                    </div>
+
+                    <button
+                      className="admin-text-button"
+                      type="button"
+                      onClick={() =>
+                        loadSection(
+                          "users"
+                        )
+                      }
+                    >
+                      View all →
+                    </button>
+                  </div>
+
+                  <UserTable
+                    users={users.slice(
+                      0,
+                      6
+                    )}
+                    onOpen={
+                      openUser
+                    }
+                    onStatus={
+                      changeUserStatus
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+          {/* =================================================
+              USERS
+              ================================================= */}
+
+          {section ===
+            "users" && (
+            <div className="admin-content">
+              <div className="admin-section-intro">
+                <div>
+                  <span className="admin-card-kicker">
+                    ACCOUNT
+                    CONTROL
+                  </span>
+
+                  <h2>
+                    Users
+                  </h2>
+
+                  <p>
+                    Inspect activity
+                    and manage
+                    account access
+                    without
+                    deleting user
+                    data.
+                  </p>
+                </div>
+
+                <div className="admin-count-badge">
+                  {users.length}{" "}
+                  accounts
+                </div>
+              </div>
+
+              <div className="admin-toolbar">
+                <div className="admin-search">
+                  <span>⌕</span>
+
+                  <input
+                    value={
+                      userSearch
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setUserSearch(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                    placeholder="Search username..."
+                  />
+
+                  {userSearch && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setUserSearch(
+                          ""
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  className="admin-secondary-button"
+                  type="button"
+                  onClick={
+                    loadUsers
                   }
-                  placeholder="Search username..."
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+
+              <div className="admin-panel admin-table-panel">
+                <UserTable
+                  users={
+                    filteredUsers
+                  }
+                  onOpen={
+                    openUser
+                  }
+                  onStatus={
+                    changeUserStatus
+                  }
+                  detailed
                 />
               </div>
             </div>
+          )}
 
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Points</th>
-                    <th>Streak</th>
-                    <th>Calculations</th>
-                    <th>Joined</th>
-                    <th />
-                  </tr>
-                </thead>
+          {/* =================================================
+              CALCULATIONS
+              ================================================= */}
 
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td>
-                        <button
-                          className="admin-user-cell"
-                          onClick={() => openUser(user)}
-                        >
-                          <span>🌱</span>
+          {section ===
+            "calculations" && (
+            <div className="admin-content">
+              <div className="admin-section-intro">
+                <div>
+                  <span className="admin-card-kicker">
+                    CARBON DATA
+                  </span>
 
-                          <div>
-                            <strong>{user.username}</strong>
-                            <small>ID #{user.id}</small>
-                          </div>
-                        </button>
-                      </td>
+                  <h2>
+                    Calculations
+                  </h2>
 
-                      <td>
-                        <span
-                          className={`admin-role ${
-                            user.role === "admin"
-                              ? "admin"
-                              : ""
-                          }`}
-                        >
-                          {user.role || "user"}
-                        </span>
-                      </td>
+                  <p>
+                    Recent saved
+                    carbon
+                    calculations
+                    across
+                    GreenPulse
+                    accounts.
+                  </p>
+                </div>
 
-                      <td>
-                        <span
-                          className={`admin-status ${
-                            user.account_status === "frozen"
-                              ? "frozen"
-                              : "active"
-                          }`}
-                        >
-                          <i />
-                          {user.account_status === "frozen"
-                            ? "Frozen"
-                            : "Active"}
-                        </span>
-                      </td>
+                <div className="admin-count-badge">
+                  {
+                    calculations.length
+                  }{" "}
+                  records
+                </div>
+              </div>
 
-                      <td>
-                        {number(user.points).toLocaleString()}
-                      </td>
+              <div className="admin-toolbar">
+                <div className="admin-search">
+                  <span>⌕</span>
 
-                      <td>{number(user.streak)} days</td>
+                  <input
+                    value={search}
+                    onChange={(
+                      event
+                    ) =>
+                      setSearch(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                    placeholder="Search by username..."
+                  />
 
-                      <td>
-                        {number(
-                          user.total_calculations
-                        )}
-                      </td>
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSearch(
+                          ""
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
 
-                      <td>{formatDate(user.created_at)}</td>
+              <div className="admin-panel admin-table-panel">
+                <div className="admin-table-scroll">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>
+                          Date
+                        </th>
 
-                      <td>
-                        <div className="admin-row-actions">
-                          <button
-                            onClick={() => openUser(user)}
+                        <th>
+                          User
+                        </th>
+
+                        <th>
+                          Total CO₂e
+                        </th>
+
+                        <th>
+                          Electricity
+                        </th>
+
+                        <th>
+                          Transport
+                        </th>
+
+                        <th>
+                          Food
+                        </th>
+
+                        <th>
+                          Waste
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredCalculations.map(
+                        (
+                          item,
+                          index
+                        ) => (
+                          <tr
+                            key={
+                              item.id ||
+                              index
+                            }
                           >
-                            Analyze
-                          </button>
+                            <td>
+                              {item.calculation_date ||
+                                "—"}
+                            </td>
 
-                          {user.role !== "admin" && (
-                            <button
-                              className={
-                                user.account_status ===
-                                "frozen"
-                                  ? "unfreeze"
-                                  : "freeze"
-                              }
-                              onClick={() =>
-                                changeAccountStatus(user)
-                              }
-                              disabled={busy}
-                            >
-                              {user.account_status ===
-                              "frozen"
-                                ? "Unfreeze"
-                                : "Freeze"}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                            <td>
+                              <button
+                                className="admin-user-link"
+                                type="button"
+                                onClick={() =>
+                                  openUser(
+                                    item.user_id
+                                  )
+                                }
+                              >
+                                {item.username ||
+                                  "Unknown"}
+                              </button>
+                            </td>
 
-              {!filteredUsers.length && (
-                <div className="admin-empty">
-                  No users match your search.
-                </div>
-              )}
-            </div>
-          </section>
-        )}
+                            <td>
+                              <strong>
+                                {Number(
+                                  item.total_co2e ||
+                                    0
+                                ).toFixed(
+                                  2
+                                )}
+                              </strong>{" "}
+                              kg
+                            </td>
 
-        {activeSection === "calculations" && (
-          <section className="admin-panel">
-            <div className="admin-panel-heading">
-              <div>
-                <span>CARBON DATA</span>
-                <h2>Recent Calculations</h2>
-              </div>
+                            <td>
+                              {Number(
+                                item.electricity_co2e ||
+                                  0
+                              ).toFixed(
+                                2
+                              )}
+                            </td>
 
-              <strong className="admin-count">
-                {calculations.length} records
-              </strong>
-            </div>
+                            <td>
+                              {Number(
+                                item.transport_co2e ||
+                                  0
+                              ).toFixed(
+                                2
+                              )}
+                            </td>
 
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Date</th>
-                    <th>CO₂e</th>
-                    <th>Points</th>
-                    <th>Transport</th>
-                    <th>Food</th>
-                  </tr>
-                </thead>
+                            <td>
+                              {Number(
+                                item.food_co2e ||
+                                  0
+                              ).toFixed(
+                                2
+                              )}
+                            </td>
 
-                <tbody>
-                  {calculations.map((item, index) => (
-                    <tr key={item.id || index}>
-                      <td>
-                        <strong>
-                          {item.username ||
-                            item.name ||
-                            `User #${item.user_id}`}
-                        </strong>
-                      </td>
-
-                      <td>
-                        {formatDate(
-                          item.calculation_date ||
-                            item.date ||
-                            item.created_at
-                        )}
-                      </td>
-
-                      <td>
-                        {number(
-                          item.co2e
-                        ).toFixed(2)} kg
-                      </td>
-
-                      <td>
-                        +{number(item.points)}
-                      </td>
-
-                      <td>
-                        {item.transport_mode ||
-                          item.transport ||
-                          "—"}
-                      </td>
-
-                      <td>
-                        {item.diet ||
-                          item.food ||
-                          "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {!calculations.length && (
-                <div className="admin-empty">
-                  No calculation records yet.
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {activeSection === "reviews" && (
-          <section className="admin-panel">
-            <div className="admin-panel-heading">
-              <div>
-                <span>COMMUNITY</span>
-                <h2>Reviews & Feedback</h2>
-              </div>
-
-              <strong className="admin-count">
-                {reviews.length} reviews
-              </strong>
-            </div>
-
-            <div className="admin-review-grid">
-              {reviews.map((review, index) => (
-                <article
-                  className="admin-review-card"
-                  key={review.id || index}
-                >
-                  <div className="admin-review-top">
-                    <div className="admin-review-avatar">
-                      {(review.name || "G")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </div>
-
-                    <div>
-                      <strong>
-                        {review.name || "Anonymous"}
-                      </strong>
-
-                      <small>
-                        {formatDate(review.created_at)}
-                      </small>
-                    </div>
-
-                    <span>
-                      {"★".repeat(
-                        Math.min(
-                          5,
-                          Math.max(
-                            0,
-                            number(review.rating)
-                          )
+                            <td>
+                              {Number(
+                                item.waste_co2e ||
+                                  0
+                              ).toFixed(
+                                2
+                              )}
+                            </td>
+                          </tr>
                         )
                       )}
-                    </span>
-                  </div>
 
-                  <p>{review.review || "No review text."}</p>
-                </article>
-              ))}
-
-              {!reviews.length && (
-                <div className="admin-empty">
-                  No reviews yet.
+                      {!filteredCalculations.length && (
+                        <tr>
+                          <td
+                            colSpan="7"
+                            className="admin-empty"
+                          >
+                            No
+                            calculations
+                            found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {activeSection === "activity" && (
-          <section className="admin-panel">
-            <div className="admin-panel-heading">
-              <div>
-                <span>PLATFORM LOG</span>
-                <h2>Activity Stream</h2>
               </div>
             </div>
+          )}
 
-            <div className="admin-full-activity">
-              {activity.map((item, index) => (
-                <div
-                  className="admin-activity"
-                  key={item.id || index}
-                >
-                  <div className="admin-activity-icon">
-                    🌱
-                  </div>
+          {/* =================================================
+              REVIEWS
+              ================================================= */}
 
-                  <div>
-                    <strong>
-                      {item.username ||
-                        item.name ||
-                        "GreenPulse user"}
-                    </strong>
+          {section ===
+            "reviews" && (
+            <div className="admin-content">
+              <div className="admin-section-intro">
+                <div>
+                  <span className="admin-card-kicker">
+                    COMMUNITY
+                  </span>
 
-                    <small>
-                      {item.action ||
-                        item.type ||
-                        "Activity recorded"}
-                    </small>
-                  </div>
+                  <h2>
+                    Reviews
+                  </h2>
 
-                  <time>
-                    {formatDate(
-                      item.created_at ||
-                        item.completed_at ||
-                        item.date
-                    )}
-                  </time>
+                  <p>
+                    Feedback
+                    submitted by
+                    GreenPulse
+                    users.
+                  </p>
                 </div>
-              ))}
 
-              {!activity.length && (
-                <div className="admin-empty">
-                  Nothing here yet.
+                <div className="admin-count-badge">
+                  {reviews.length}{" "}
+                  reviews
                 </div>
-              )}
+              </div>
+
+              <div className="admin-review-grid">
+                {reviews.map(
+                  (review) => (
+                    <article
+                      className="admin-review-card"
+                      key={
+                        review.id
+                      }
+                    >
+                      <div className="admin-review-top">
+                        <div className="admin-review-avatar">
+                          {(
+                            review.name ||
+                            "U"
+                          )
+                            .charAt(
+                              0
+                            )
+                            .toUpperCase()}
+                        </div>
+
+                        <div>
+                          <strong>
+                            {review.name ||
+                              "Anonymous"}
+                          </strong>
+
+                          <span>
+                            {review.created_at
+                              ? new Date(
+                                  review.created_at
+                                ).toLocaleDateString()
+                              : "Date unavailable"}
+                          </span>
+                        </div>
+
+                        <div className="admin-review-rating">
+                          {"★".repeat(
+                            Math.max(
+                              0,
+                              Math.min(
+                                5,
+                                Number(
+                                  review.rating ||
+                                    0
+                                )
+                              )
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      <p>
+                        {review.review ||
+                          "No review text."}
+                      </p>
+                    </article>
+                  )
+                )}
+
+                {!reviews.length && (
+                  <div className="admin-empty-card">
+                    No reviews
+                    available.
+                  </div>
+                )}
+              </div>
             </div>
-          </section>
-        )}
-      </main>
+          )}
+
+          {/* =================================================
+              ACTIVITY
+              ================================================= */}
+
+          {section ===
+            "activity" && (
+            <div className="admin-content">
+              <div className="admin-section-intro">
+                <div>
+                  <span className="admin-card-kicker">
+                    ACTIVITY
+                    MONITOR
+                  </span>
+
+                  <h2>
+                    Activity
+                  </h2>
+
+                  <p>
+                    A simple view
+                    of recent
+                    GreenPulse
+                    participation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="admin-overview-grid">
+                <div className="admin-panel">
+                  <div className="admin-panel-heading">
+                    <div>
+                      <span>
+                        CALCULATIONS
+                      </span>
+
+                      <h3>
+                        Daily
+                        activity
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="admin-bars">
+                    {(
+                      activity?.calculations ||
+                      []
+                    )
+                      .slice()
+                      .reverse()
+                      .slice(
+                        -14
+                      )
+                      .map(
+                        (
+                          item,
+                          index
+                        ) => (
+                          <div
+                            className="admin-bar-column"
+                            key={
+                              item.calculation_date ||
+                              index
+                            }
+                          >
+                            <div className="admin-bar-value">
+                              {
+                                item.count
+                              }
+                            </div>
+
+                            <div className="admin-bar-track">
+                              <div
+                                className="admin-bar-fill"
+                                style={{
+                                  height: `${Math.max(
+                                    7,
+                                    (Number(
+                                      item.count
+                                    ) /
+                                      maxActivity) *
+                                      100
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+
+                            <span>
+                              {String(
+                                item.calculation_date ||
+                                  ""
+                              ).slice(
+                                5
+                              )}
+                            </span>
+                          </div>
+                        )
+                      )}
+                  </div>
+                </div>
+
+                <div className="admin-panel">
+                  <div className="admin-panel-heading">
+                    <div>
+                      <span>
+                        CHALLENGES
+                      </span>
+
+                      <h3>
+                        Recent
+                        completions
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="admin-activity-list">
+                    {(
+                      activity?.challenges ||
+                      []
+                    )
+                      .slice(
+                        0,
+                        10
+                      )
+                      .map(
+                        (
+                          item,
+                          index
+                        ) => (
+                          <div
+                            className="admin-activity-row"
+                            key={
+                              item.challenge_date ||
+                              index
+                            }
+                          >
+                            <span className="activity-date">
+                              {
+                                item.challenge_date
+                              }
+                            </span>
+
+                            <strong>
+                              {
+                                item.count
+                              }{" "}
+                              completed
+                            </strong>
+
+                            <span>
+                              +
+                              {
+                                item.points ||
+                                  0
+                              }{" "}
+                              pts
+                            </span>
+                          </div>
+                        )
+                      )}
+
+                    {!activity
+                      ?.challenges
+                      ?.length && (
+                      <div className="admin-empty">
+                        No challenge
+                        activity
+                        yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* =====================================================
+          USER ANALYSIS DRAWER
+          ===================================================== */}
 
       {selectedUser && (
         <div
-          className="admin-modal-backdrop"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setSelectedUser(null);
+          className="admin-overlay"
+          onClick={(
+            event
+          ) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setSelectedUser(
+                null
+              );
             }
           }}
         >
-          <aside className="admin-user-modal">
+          <aside className="admin-user-drawer">
             <button
-              className="admin-modal-close"
-              onClick={() => setSelectedUser(null)}
+              className="admin-drawer-close"
+              type="button"
+              onClick={() =>
+                setSelectedUser(
+                  null
+                )
+              }
             >
               ×
             </button>
 
-            <div className="admin-modal-avatar">🌱</div>
+            {selectedUser.loading ? (
+              <div className="admin-drawer-loading">
+                <div className="admin-loader" />
 
-            <span className="admin-kicker">
-              USER ANALYSIS
-            </span>
-
-            <h2>{selectedUser.username}</h2>
-
-            <p>
-              Account #{selectedUser.id}
-            </p>
-
-            <div className="admin-analysis-grid">
-              <div>
-                <span>Points</span>
-                <strong>
-                  {number(
-                    userAnalysis?.points ??
-                      selectedUser.points
-                  ).toLocaleString()}
-                </strong>
+                <p>
+                  Loading user
+                  analysis...
+                </p>
               </div>
+            ) : (
+              <>
+                <div className="admin-drawer-header">
+                  <div className="admin-large-avatar">
+                    {(
+                      selectedUser
+                        .user
+                        ?.username ||
+                      "U"
+                    )
+                      .charAt(
+                        0
+                      )
+                      .toUpperCase()}
+                  </div>
 
-              <div>
-                <span>Streak</span>
-                <strong>
-                  {number(
-                    userAnalysis?.streak ??
-                      selectedUser.streak
-                  )}
-                </strong>
-              </div>
+                  <span className="admin-card-kicker">
+                    USER
+                    ANALYSIS
+                  </span>
 
-              <div>
-                <span>Calculations</span>
-                <strong>
-                  {number(
-                    userAnalysis?.total_calculations ??
-                      selectedUser.total_calculations
-                  )}
-                </strong>
-              </div>
+                  <h2>
+                    {
+                      selectedUser
+                        .user
+                        ?.username
+                    }
+                  </h2>
 
-              <div>
-                <span>Eco Days</span>
-                <strong>
-                  {number(
-                    userAnalysis?.completed_days ??
-                      selectedUser.completed_days
-                  )}
-                </strong>
-              </div>
-            </div>
+                  <div className="admin-user-meta">
+                    <span
+                      className={
+                        selectedUser
+                          .user
+                          ?.account_status ===
+                        "frozen"
+                          ? "frozen"
+                          : "active"
+                      }
+                    >
+                      {selectedUser
+                        .user
+                        ?.account_status ||
+                        "active"}
+                    </span>
 
-            <div className="admin-modal-status">
-              <span>Account status</span>
+                    <span>
+                      {selectedUser
+                        .user
+                        ?.role ||
+                        "user"}
+                    </span>
+                  </div>
+                </div>
 
-              <strong
-                className={
-                  selectedUser.account_status ===
-                  "frozen"
-                    ? "frozen"
-                    : "active"
-                }
-              >
-                {selectedUser.account_status ===
-                "frozen"
-                  ? "❄️ Frozen"
-                  : "🟢 Active"}
-              </strong>
-            </div>
+                <div className="admin-drawer-stats">
+                  <MiniStat
+                    label="Points"
+                    value={
+                      selectedUser
+                        .summary
+                        ?.points ||
+                      0
+                    }
+                  />
 
-            {selectedUser.role !== "admin" && (
-              <button
-                className={`admin-modal-action ${
-                  selectedUser.account_status ===
-                  "frozen"
-                    ? "unfreeze"
-                    : "freeze"
-                }`}
-                onClick={() =>
-                  changeAccountStatus(selectedUser)
-                }
-              >
-                {selectedUser.account_status ===
-                "frozen"
-                  ? "Unfreeze Account"
-                  : "Freeze Account"}
-              </button>
+                  <MiniStat
+                    label="Streak"
+                    value={
+                      selectedUser
+                        .summary
+                        ?.streak ||
+                      0
+                    }
+                  />
+
+                  <MiniStat
+                    label="Calculations"
+                    value={
+                      selectedUser
+                        .summary
+                        ?.total_calculations ||
+                      0
+                    }
+                  />
+
+                  <MiniStat
+                    label="Forest"
+                    value={
+                      selectedUser
+                        .summary
+                        ?.forest_actions ||
+                      0
+                    }
+                  />
+                </div>
+
+                <div className="admin-drawer-section">
+                  <span>
+                    CARBON
+                    PROFILE
+                  </span>
+
+                  <div className="admin-carbon-list">
+                    <ImpactRow
+                      label="Electricity"
+                      value={`${Number(
+                        selectedUser
+                          .carbon
+                          ?.electricity_co2e ||
+                          0
+                      ).toFixed(
+                        2
+                      )} kg`}
+                      icon="⚡"
+                    />
+
+                    <ImpactRow
+                      label="LPG"
+                      value={`${Number(
+                        selectedUser
+                          .carbon
+                          ?.lpg_co2e ||
+                          0
+                      ).toFixed(
+                        2
+                      )} kg`}
+                      icon="♨"
+                    />
+
+                    <ImpactRow
+                      label="Transport"
+                      value={`${Number(
+                        selectedUser
+                          .carbon
+                          ?.transport_co2e ||
+                          0
+                      ).toFixed(
+                        2
+                      )} kg`}
+                      icon="⌁"
+                    />
+
+                    <ImpactRow
+                      label="Food"
+                      value={`${Number(
+                        selectedUser
+                          .carbon
+                          ?.food_co2e ||
+                          0
+                      ).toFixed(
+                        2
+                      )} kg`}
+                      icon="◉"
+                    />
+
+                    <ImpactRow
+                      label="Waste"
+                      value={`${Number(
+                        selectedUser
+                          .carbon
+                          ?.waste_co2e ||
+                          0
+                      ).toFixed(
+                        2
+                      )} kg`}
+                      icon="♻"
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-drawer-section">
+                  <span>
+                    ACCOUNT
+                  </span>
+
+                  <div className="admin-account-info">
+                    <p>
+                      <b>
+                        Joined
+                      </b>
+
+                      <span>
+                        {selectedUser
+                          .user
+                          ?.created_at
+                          ? new Date(
+                              selectedUser
+                                .user
+                                .created_at
+                            ).toLocaleDateString()
+                          : "—"}
+                      </span>
+                    </p>
+
+                    <p>
+                      <b>
+                        Sessions
+                      </b>
+
+                      <span>
+                        {selectedUser
+                          .summary
+                          ?.sessions ||
+                          0}
+                      </span>
+                    </p>
+
+                    <p>
+                      <b>
+                        Completed
+                        days
+                      </b>
+
+                      <span>
+                        {selectedUser
+                          .summary
+                          ?.completed_days ||
+                          0}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {selectedUser
+                  .user
+                  ?.role !==
+                  "admin" && (
+                  <div className="admin-drawer-actions">
+                    {selectedUser
+                      .user
+                      ?.account_status ===
+                    "frozen" ? (
+                      <button
+                        className="admin-unfreeze-button"
+                        type="button"
+                        onClick={() =>
+                          changeUserStatus(
+                            selectedUser
+                              .user
+                              .id,
+                            "active"
+                          )
+                        }
+                      >
+                        Unfreeze
+                        Account
+                      </button>
+                    ) : (
+                      <button
+                        className="admin-freeze-button"
+                        type="button"
+                        onClick={() =>
+                          changeUserStatus(
+                            selectedUser
+                              .user
+                              .id,
+                            "frozen"
+                          )
+                        }
+                      >
+                        Freeze
+                        Account
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-
-            <div className="admin-modal-note">
-              <span>🔐</span>
-              <p>
-                Account controls are enforced by the
-                GreenPulse backend. Changing browser
-                code cannot grant admin privileges.
-              </p>
-            </div>
           </aside>
         </div>
       )}
+    </main>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  detail,
+}) {
+  return (
+    <div className="admin-stat-card">
+      <div className="admin-stat-icon">
+        {icon}
+      </div>
+
+      <div>
+        <span>
+          {label}
+        </span>
+
+        <strong>
+          {value}
+        </strong>
+
+        <small>
+          {detail}
+        </small>
+      </div>
     </div>
   );
 }
+
+function ImpactRow({
+  icon,
+  label,
+  value,
+}) {
+  return (
+    <div className="admin-impact-row">
+      <div className="admin-impact-left">
+        <span>
+          {icon}
+        </span>
+
+        <p>
+          {label}
+        </p>
+      </div>
+
+      <strong>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+}) {
+  return (
+    <div className="admin-mini-stat">
+      <span>
+        {label}
+      </span>
+
+      <strong>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function UserTable({
+  users,
+  onOpen,
+  onStatus,
+  detailed = false,
+}) {
+  return (
+    <div className="admin-table-scroll">
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>
+              User
+            </th>
+
+            <th>
+              Role
+            </th>
+
+            <th>
+              Status
+            </th>
+
+            <th>
+              Points
+            </th>
+
+            <th>
+              Streak
+            </th>
+
+            <th>
+              Calculations
+            </th>
+
+            {detailed && (
+              <th>
+                Joined
+              </th>
+            )}
+
+            <th>
+              Manage
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {users.map(
+            (user) => (
+              <tr
+                key={
+                  user.id
+                }
+              >
+                <td>
+                  <button
+                    className="admin-table-user"
+                    type="button"
+                    onClick={() =>
+                      onOpen(
+                        user.id
+                      )
+                    }
+                  >
+                    <span>
+                      {(
+                        user.username ||
+                        "U"
+                      )
+                        .charAt(
+                          0
+                        )
+                        .toUpperCase()}
+                    </span>
+
+                    <strong>
+                      {
+                        user.username
+                      }
+                    </strong>
+                  </button>
+                </td>
+
+                <td>
+                  <span
+                    className={`admin-role ${
+                      user.role ===
+                      "admin"
+                        ? "admin"
+                        : ""
+                    }`}
+                  >
+                    {
+                      user.role
+                    }
+                  </span>
+                </td>
+
+                <td>
+                  <span
+                    className={`admin-account-status ${
+                      user.account_status ===
+                      "frozen"
+                        ? "frozen"
+                        : "active"
+                    }`}
+                  >
+                    <i />
+
+                    {user.account_status ||
+                      "active"}
+                  </span>
+                </td>
+
+                <td>
+                  {user.points ||
+                    0}
+                </td>
+
+                <td>
+                  {user.streak ||
+                    0}
+                </td>
+
+                <td>
+                  {user.total_calculations ||
+                    0}
+                </td>
+
+                {detailed && (
+                  <td>
+                    {user.created_at
+                      ? new Date(
+                          user.created_at
+                        ).toLocaleDateString()
+                      : "—"}
+                  </td>
+                )}
+
+                <td>
+                  {user.role ===
+                  "admin" ? (
+                    <span className="admin-protected">
+                      Protected
+                    </span>
+                  ) : user.account_status ===
+                    "frozen" ? (
+                    <button
+                      className="admin-small-action unfreeze"
+                      type="button"
+                      onClick={() =>
+                        onStatus(
+                          user.id,
+                          "active"
+                        )
+                      }
+                    >
+                      Unfreeze
+                    </button>
+                  ) : (
+                    <button
+                      className="admin-small-action freeze"
+                      type="button"
+                      onClick={() =>
+                        onStatus(
+                          user.id,
+                          "frozen"
+                        )
+                      }
+                    >
+                      Freeze
+                    </button>
+                  )}
+                </td>
+              </tr>
+            )
+          )}
+
+          {!users.length && (
+            <tr>
+              <td
+                colSpan={
+                  detailed
+                    ? 8
+                    : 7
+                }
+                className="admin-empty"
+              >
+                No users
+                found.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default AdminDashboard;

@@ -1,277 +1,562 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 
 const API_BASE = "https://greenpulse-web-tc0g.onrender.com";
 
-const FOREST_IMAGE =
-  "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1400&q=85";
-
-const LEAF_IMAGE =
-  "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=900&q=85";
-
-const levelData = [
-  { min: 0, name: "Eco Starter", icon: "🌱" },
-  { min: 100, name: "Green Explorer", icon: "🌿" },
-  { min: 250, name: "Eco Learner", icon: "🍃" },
-  { min: 500, name: "Climate Champion", icon: "🌎" },
-  { min: 1000, name: "Planet Protector", icon: "🛡️" },
-  { min: 2000, name: "Green Leader", icon: "👑" },
-  { min: 5000, name: "Earth Guardian", icon: "🌳" },
+const SEARCH_ITEMS = [
+  {
+    name: "Calculator",
+    description: "Calculate your carbon footprint",
+    path: "/calculator",
+    icon: "🧮",
+  },
+  {
+    name: "Forest",
+    description: "Grow and explore your digital forest",
+    path: "/forest",
+    icon: "🌲",
+  },
+  {
+    name: "Challenges",
+    description: "Complete today's green challenge",
+    path: "/challenges",
+    icon: "🎯",
+  },
+  {
+    name: "Rewards",
+    description: "View your GreenPulse rewards",
+    path: "/rewards",
+    icon: "🏆",
+  },
+  {
+    name: "Focus",
+    description: "Stay focused while making an impact",
+    path: "/focus",
+    icon: "🧘",
+  },
+  {
+    name: "Progress",
+    description: "View your long-term progress",
+    path: "/progress",
+    icon: "📈",
+  },
+  {
+    name: "Settings",
+    description: "Manage your account",
+    path: "/settings",
+    icon: "⚙️",
+  },
+  {
+    name: "Feedback",
+    description: "Share your thoughts",
+    path: "/feedback",
+    icon: "💬",
+  },
 ];
 
-function number(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+const PERIODS = {
+  "7D": 7,
+  "30D": 30,
+  "1Y": 365,
+};
+
+function getToken() {
+  return localStorage.getItem("greenpulse_token");
 }
 
-function getLevel(points) {
-  let current = levelData[0];
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem("greenpulse_user") || "{}");
+  } catch {
+    return {};
+  }
+}
 
-  for (const level of levelData) {
-    if (points >= level.min) {
-      current = level;
+/*
+  The backend may eventually return daily history under different names.
+  This normalizer keeps the dashboard flexible without changing the API.
+*/
+function extractHistory(source) {
+  if (!source) return [];
+
+  const candidates = [
+    source.daily,
+    source.daily_data,
+    source.history,
+    source.daily_history,
+    source.activity,
+    source.activity_history,
+    source.calculations,
+    source.records,
+    source.entries,
+    source.data,
+    source.stats?.daily,
+    source.stats?.history,
+    source.stats?.daily_history,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length) {
+      return candidate;
     }
   }
 
-  return current;
+  return [];
 }
 
-function getNextLevel(points) {
-  for (const level of levelData) {
-    if (level.min > points) {
-      return level;
-    }
+function getRecordDate(record) {
+  if (!record || typeof record !== "object") return null;
+
+  const raw =
+    record.date ||
+    record.day ||
+    record.created_at ||
+    record.createdAt ||
+    record.timestamp ||
+    record.datetime;
+
+  if (!raw) return null;
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getRecordCarbon(record) {
+  if (!record || typeof record !== "object") return 0;
+
+  const values = [
+    record.total_co2e,
+    record.totalCo2e,
+    record.total_co2,
+    record.totalCo2,
+    record.co2e,
+    record.co2,
+    record.carbon,
+    record.carbon_footprint,
+    record.carbonFootprint,
+    record.footprint,
+    record.emission,
+    record.emissions,
+    record.value,
+  ];
+
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return Math.max(0, number);
   }
 
-  return null;
+  return 0;
 }
 
-function StatCard({
-  icon,
-  title,
-  value,
-  unit,
-  description,
-  accent = "green",
-  onClick,
-}) {
-  return (
-    <button
-      className={`dash-stat-card ${accent}`}
-      onClick={onClick}
-      type="button"
-    >
-      <div className="dash-stat-top">
-        <span className="dash-stat-icon">{icon}</span>
-        <span className="dash-stat-arrow">↗</span>
-      </div>
+function buildChartData(history, period) {
+  const days = PERIODS[period];
+  const today = new Date();
 
-      <div className="dash-stat-title">{title}</div>
+  const source = history
+    .map((record) => {
+      const date = getRecordDate(record);
+      return {
+        date,
+        carbon: getRecordCarbon(record),
+      };
+    })
+    .filter((item) => item.date);
 
-      <div className="dash-stat-value">
-        {value}
-        {unit && <small>{unit}</small>}
-      </div>
+  const dailyMap = new Map();
 
-      <div className="dash-stat-description">{description}</div>
-    </button>
-  );
+  source.forEach((item) => {
+    const key = item.date.toISOString().slice(0, 10);
+    dailyMap.set(key, (dailyMap.get(key) || 0) + item.carbon);
+  });
+
+  if (period === "1Y") {
+    const months = [];
+
+    for (let i = 11; i >= 0; i -= 1) {
+      const date = new Date(
+        today.getFullYear(),
+        today.getMonth() - i,
+        1
+      );
+
+      const year = date.getFullYear();
+      const month = date.getMonth();
+
+      let total = 0;
+
+      dailyMap.forEach((value, key) => {
+        const itemDate = new Date(`${key}T00:00:00`);
+
+        if (
+          itemDate.getFullYear() === year &&
+          itemDate.getMonth() === month
+        ) {
+          total += value;
+        }
+      });
+
+      months.push({
+        label: date.toLocaleDateString("en-US", {
+          month: "short",
+        }),
+        value: Number(total.toFixed(2)),
+      });
+    }
+
+    return months;
+  }
+
+  const result = [];
+
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = new Date(today);
+    date.setHours(0, 0, 0, 0);
+    date.setDate(today.getDate() - i);
+
+    const key = date.toISOString().slice(0, 10);
+
+    result.push({
+      label:
+        period === "7D"
+          ? date.toLocaleDateString("en-US", { weekday: "short" })
+          : String(date.getDate()),
+      value: Number((dailyMap.get(key) || 0).toFixed(2)),
+      date: key,
+    });
+  }
+
+  /*
+    For 30 days we keep every day in the data,
+    but only label every third day to keep the chart readable.
+  */
+  if (period === "30D") {
+    return result.map((item, index) => ({
+      ...item,
+      label:
+        index % 3 === 0 || index === result.length - 1
+          ? item.label
+          : "",
+    }));
+  }
+
+  return result;
 }
 
-function QuickAction({ icon, title, text, onClick }) {
-  return (
-    <button className="dash-quick-action" onClick={onClick} type="button">
-      <span className="dash-action-icon">{icon}</span>
-
-      <span className="dash-action-copy">
-        <strong>{title}</strong>
-        <small>{text}</small>
-      </span>
-
-      <span className="dash-action-arrow">→</span>
-    </button>
-  );
-}
-
-export default function Dashboard() {
+function Dashboard() {
   const navigate = useNavigate();
 
-  const [dashboard, setDashboard] = useState(null);
   const [user, setUser] = useState(null);
-  const [activePeriod, setActivePeriod] = useState("30D");
-  const [now, setNow] = useState(new Date());
+  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const token = localStorage.getItem("greenpulse_token");
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [period, setPeriod] = useState("30D");
+  const [profileOpen, setProfileOpen] = useState(false);
 
-  const loadDashboard = useCallback(async () => {
+  const token = getToken();
+
+  useEffect(() => {
     if (!token) {
       navigate("/auth");
       return;
     }
 
+    loadDashboard();
+  }, []);
+
+  async function loadDashboard() {
     try {
+      setLoading(true);
       setError("");
 
-      const [dashboardResponse, meResponse] = await Promise.all([
-        fetch(`${API_BASE}/api/dashboard?token=${encodeURIComponent(token)}`),
-        fetch(`${API_BASE}/api/me?token=${encodeURIComponent(token)}`),
+      const currentToken = getToken();
+
+      if (!currentToken) {
+        navigate("/auth");
+        return;
+      }
+
+      const encodedToken = encodeURIComponent(currentToken);
+
+      const [meResponse, dashboardResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/me?token=${encodedToken}`),
+        fetch(`${API_BASE}/api/dashboard?token=${encodedToken}`),
       ]);
 
-      if (dashboardResponse.status === 401 || meResponse.status === 401) {
+      if (
+        meResponse.status === 401 ||
+        dashboardResponse.status === 401
+      ) {
         localStorage.removeItem("greenpulse_token");
         localStorage.removeItem("greenpulse_user");
         navigate("/auth");
         return;
       }
 
-      if (!dashboardResponse.ok) {
-        throw new Error("Could not load your dashboard.");
+      if (!meResponse.ok) {
+        throw new Error("Unable to load your account.");
       }
 
+      if (!dashboardResponse.ok) {
+        throw new Error("Unable to load dashboard.");
+      }
+
+      const meData = await meResponse.json();
       const dashboardData = await dashboardResponse.json();
 
-      let meData = null;
+      const backendUser = meData.user || meData;
 
-      if (meResponse.ok) {
-        meData = await meResponse.json();
-      }
-
+      setUser(backendUser);
       setDashboard(dashboardData);
-      setUser(meData);
-      setNow(new Date());
+
+      localStorage.setItem(
+        "greenpulse_user",
+        JSON.stringify(backendUser)
+      );
     } catch (err) {
-      setError(err.message || "Unable to connect to GreenPulse.");
+      console.error("Dashboard error:", err);
+      setError(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
-  }, [navigate, token]);
+  }
 
-  useEffect(() => {
-    loadDashboard();
+  const filteredSearch = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-    const refresh = () => {
-      loadDashboard();
-      setNow(new Date());
-    };
+    if (!query) return SEARCH_ITEMS;
 
-    window.addEventListener("focus", refresh);
-    window.addEventListener("greenpulse:data-updated", refresh);
+    return SEARCH_ITEMS.filter(
+      (item) =>
+        item.name.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query)
+    );
+  }, [search]);
 
-    return () => {
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("greenpulse:data-updated", refresh);
-    };
-  }, [loadDashboard]);
+  const stats = dashboard?.stats || dashboard || {};
 
-  const stats = useMemo(() => {
-    const data = dashboard || {};
-
-    return {
-      points: number(data.points),
-      streak: number(data.streak),
-      level: number(data.level, 1),
-      forestActions: number(data.forest_actions),
-      completedDays: number(data.completed_days),
-      calculations: number(data.total_calculations),
-      totalCO2: number(data.total_co2e),
-      savedCO2: number(data.total_saved_co2e),
-    };
-  }, [dashboard]);
+  const storedUser = getStoredUser();
 
   const username =
     user?.username ||
-    user?.name ||
-    JSON.parse(localStorage.getItem("greenpulse_user") || "null")?.username ||
+    storedUser?.username ||
     "Green Explorer";
 
-  const level = getLevel(stats.points);
-  const nextLevel = getNextLevel(stats.points);
-
-  const levelProgress = nextLevel
-    ? Math.min(
-        100,
-        Math.max(
-          0,
-          ((stats.points - level.min) /
-            (nextLevel.min - level.min)) *
-            100
-        )
-      )
-    : 100;
-
-  const trees = Math.max(
-    0,
-    Math.floor(stats.forestActions / 5)
+  const points = Number(
+    stats.points ?? user?.points ?? 0
   );
 
-  const footprintScore = Math.min(
+  const streak = Number(
+    stats.streak ?? user?.streak ?? 0
+  );
+
+  const level = Number(
+    stats.level ?? user?.level ?? 1
+  );
+
+  const forestActions = Number(
+    stats.forest_actions ??
+      stats.forestActions ??
+      user?.forest_actions ??
+      0
+  );
+
+  const completedDays = Number(
+    stats.completed_days ??
+      stats.completedDays ??
+      user?.completed_days ??
+      0
+  );
+
+  const totalCalculations = Number(
+    stats.total_calculations ??
+      stats.totalCalculations ??
+      user?.total_calculations ??
+      0
+  );
+
+  const totalCo2e = Number(
+    stats.total_co2e ??
+      stats.totalCo2e ??
+      stats.total_footprint ??
+      stats.totalFootprint ??
+      user?.total_co2e ??
+      0
+  );
+
+  const savedCo2e = Number(
+    stats.total_saved_co2e ??
+      stats.totalSavedCo2e ??
+      user?.total_saved_co2e ??
+      0
+  );
+
+  const trees = Math.floor(forestActions / 5);
+
+  const levelProgress = Math.min(
     100,
-    Math.round((Math.min(stats.completedDays, 30) / 30) * 100)
+    Math.max(0, points % 100)
   );
 
-  const greeting =
-    now.getHours() < 12
-      ? "Good morning"
-      : now.getHours() < 18
-      ? "Good afternoon"
-      : "Good evening";
+  const footprintProgress = Math.min(
+    100,
+    Math.round(
+      (Math.min(completedDays, 30) / 30) * 100
+    )
+  );
 
-  const chartValues =
-    activePeriod === "7D"
-      ? [28, 42, 35, 57, 48, 69, 82]
-      : activePeriod === "1Y"
-      ? [32, 38, 45, 42, 54, 61, 72, 67, 78, 71, 85, 91]
-      : [32, 45, 39, 57, 51, 68, 61, 79, 73, 88];
+  const isAdmin =
+    String(
+      user?.role ||
+        storedUser?.role ||
+        ""
+    ).toLowerCase() === "admin";
+
+  const history = useMemo(
+    () => extractHistory(dashboard),
+    [dashboard]
+  );
+
+  const chartData = useMemo(
+    () => buildChartData(history, period),
+    [history, period]
+  );
+
+  const maxChartValue = Math.max(
+    ...chartData.map((item) => item.value),
+    0
+  );
+
+  function openSearchItem(path) {
+    setSearch("");
+    setSearchOpen(false);
+    navigate(path);
+  }
+
+  function logout() {
+    localStorage.removeItem("greenpulse_token");
+    localStorage.removeItem("greenpulse_user");
+    navigate("/");
+  }
+
+  function openSettings() {
+    setProfileOpen(false);
+    navigate("/settings");
+  }
+
+  function openAdminStats() {
+    setProfileOpen(false);
+    navigate("/admin");
+  }
 
   if (loading) {
     return (
-      <div className="dashboard-page dash-loading-screen">
-        <div className="dash-loader">
-          <div>🌱</div>
-          <strong>Growing your dashboard...</strong>
-          <span>Syncing with GreenPulse</span>
+      <main className="dashboard-loading">
+        <div className="dashboard-loader">
+          <div className="loader-leaf">🌱</div>
+          <h2>Growing your dashboard...</h2>
+          <p>Syncing your GreenPulse impact.</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (error) {
     return (
-      <div className="dashboard-page dash-loading-screen">
-        <div className="dash-loader dash-error-state">
-          <div>🌧️</div>
-          <strong>Dashboard unavailable</strong>
-          <span>{error}</span>
-
-          <button type="button" onClick={loadDashboard}>
-            Try again
-          </button>
+      <main className="dashboard-loading">
+        <div className="dashboard-error-card">
+          <div className="error-icon">⚠️</div>
+          <h2>Dashboard unavailable</h2>
+          <p>{error}</p>
+          <button onClick={loadDashboard}>Try again</button>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="dashboard-page">
+    <main className="dashboard-page">
       <div className="dash-background-glow dash-glow-one" />
       <div className="dash-background-glow dash-glow-two" />
 
       <header className="dash-topbar">
-        <div className="dash-mobile-brand">
+        <button
+          className="dash-mobile-brand"
+          onClick={() => navigate("/")}
+          type="button"
+        >
           <span>🌿</span>
           GREEN<span>PULSE</span>
-        </div>
+        </button>
 
         <div className="dash-search">
           <span>⌕</span>
+
           <input
-            type="text"
+            value={search}
             placeholder="Search GreenPulse..."
             aria-label="Search"
+            type="text"
+            onFocus={() => setSearchOpen(true)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setSearchOpen(true);
+            }}
           />
+
+          {search && (
+            <button
+              className="dash-search-clear"
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
+
+          {searchOpen && (
+            <div
+              className="dash-search-results"
+              onMouseDown={(event) =>
+                event.preventDefault()
+              }
+            >
+              {filteredSearch.length > 0 ? (
+                filteredSearch.map((item) => (
+                  <button
+                    key={item.path}
+                    className="dash-search-result"
+                    type="button"
+                    onClick={() =>
+                      openSearchItem(item.path)
+                    }
+                  >
+                    <span className="dash-search-result-icon">
+                      {item.icon}
+                    </span>
+
+                    <span className="dash-search-result-copy">
+                      <strong>{item.name}</strong>
+                      <small>{item.description}</small>
+                    </span>
+
+                    <span className="dash-search-arrow">
+                      →
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="dash-search-empty">
+                  🌿
+                  <span>No GreenPulse feature found.</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="dash-top-actions">
@@ -287,21 +572,66 @@ export default function Dashboard() {
           <button
             className="dash-profile"
             type="button"
-            onClick={() => navigate("/settings")}
+            onClick={() =>
+              setProfileOpen((value) => !value)
+            }
           >
-            <span className="dash-profile-avatar">🌱</span>
+            <span className="dash-profile-avatar">
+              🌱
+            </span>
 
             <span className="dash-profile-info">
               <strong>{username}</strong>
-              <small>{level.name}</small>
+              <small>
+                {isAdmin ? "Administrator" : "Eco Starter"}
+              </small>
             </span>
 
-            <span>⌄</span>
+            <span className="dash-profile-chevron">
+              {profileOpen ? "⌃" : "⌄"}
+            </span>
           </button>
+
+          {profileOpen && (
+            <div className="dash-profile-menu">
+              <button
+                type="button"
+                className="dash-profile-menu-item"
+                onClick={openSettings}
+              >
+                <span>⚙️</span>
+                <span>Settings</span>
+              </button>
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="dash-profile-menu-item admin"
+                  onClick={openAdminStats}
+                >
+                  <span>📊</span>
+                  <span>User & GreenPulse Stats</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="dash-profile-menu-item logout"
+                onClick={() => {
+                  setProfileOpen(false);
+                  logout();
+                }}
+              >
+                <span>🚪</span>
+                <span>Sign out</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       <main className="dash-content">
+        {/* HERO */}
         <section className="dash-hero">
           <div className="dash-hero-copy">
             <div className="dash-eyebrow">
@@ -309,7 +639,8 @@ export default function Dashboard() {
             </div>
 
             <h1>
-              {greeting}, <span>{username}</span>.
+              Good evening,{" "}
+              <span>{username}</span>.
             </h1>
 
             <p>
@@ -319,25 +650,35 @@ export default function Dashboard() {
             </p>
 
             <div className="dash-hero-level">
-              <div className="dash-level-icon">{level.icon}</div>
+              <div className="dash-level-icon">
+                🌱
+              </div>
 
               <div className="dash-level-copy">
-                <strong>{level.name}</strong>
-                <span>{stats.points.toLocaleString()} eco points</span>
+                <strong>
+                  {level <= 1
+                    ? "Eco Starter"
+                    : `Level ${level}`}
+                </strong>
+
+                <span>{points} eco points</span>
               </div>
 
               <div className="dash-level-progress">
                 <div>
-                  <span style={{ width: `${levelProgress}%` }} />
+                  <span
+                    style={{
+                      width: `${levelProgress}%`,
+                    }}
+                  />
                 </div>
 
                 <small>
-                  {nextLevel
-                    ? `${Math.max(
-                        0,
-                        nextLevel.min - stats.points
-                      )} points to ${nextLevel.name}`
-                    : "Maximum level reached"}
+                  {Math.max(
+                    0,
+                    100 - levelProgress
+                  )}{" "}
+                  points to next level
                 </small>
               </div>
             </div>
@@ -346,7 +687,8 @@ export default function Dashboard() {
           <div
             className="dash-forest-card"
             style={{
-              backgroundImage: `linear-gradient(90deg, rgba(1,23,16,.92), rgba(1,23,16,.22)), url("${FOREST_IMAGE}")`,
+              backgroundImage:
+                "linear-gradient(90deg, rgba(1, 23, 16, 0.94), rgba(1, 23, 16, 0.24)), url('https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1400&q=85')",
             }}
           >
             <div className="dash-forest-card-content">
@@ -369,74 +711,163 @@ export default function Dashboard() {
                 type="button"
                 onClick={() => navigate("/forest")}
               >
-                Enter My Forest <span>→</span>
+                <span>Enter My Forest</span>
+                <b>→</b>
               </button>
             </div>
 
-            <div className="dash-forest-orb">🌳</div>
+            <div className="dash-forest-orb">
+              🌳
+            </div>
           </div>
         </section>
 
+        {/* STATS */}
         <section className="dash-stat-grid">
-          <StatCard
-            icon="🍃"
-            title="Carbon Saved"
-            value={stats.savedCO2.toFixed(1)}
-            unit="kg"
-            description="CO₂e saved through your actions"
+          <button
+            className="dash-stat-card green"
+            type="button"
             onClick={() => navigate("/progress")}
-          />
+          >
+            <div className="dash-stat-top">
+              <span className="dash-stat-icon">
+                🍃
+              </span>
+              <span className="dash-stat-arrow">
+                ↗
+              </span>
+            </div>
 
-          <StatCard
-            icon="🌳"
-            title="Trees Grown"
-            value={trees}
-            description="Virtual trees in your journey"
-            accent="tree"
+            <div className="dash-stat-title">
+              Carbon Saved
+            </div>
+
+            <div className="dash-stat-value">
+              {savedCo2e.toFixed(1)}
+              <small>kg</small>
+            </div>
+
+            <div className="dash-stat-description">
+              CO₂e saved through your actions
+            </div>
+          </button>
+
+          <button
+            className="dash-stat-card tree"
+            type="button"
             onClick={() => navigate("/forest")}
-          />
+          >
+            <div className="dash-stat-top">
+              <span className="dash-stat-icon">
+                🌳
+              </span>
+              <span className="dash-stat-arrow">
+                ↗
+              </span>
+            </div>
 
-          <StatCard
-            icon="⭐"
-            title="Points Earned"
-            value={stats.points.toLocaleString()}
-            description="Lifetime GreenPulse points"
-            accent="gold"
+            <div className="dash-stat-title">
+              Trees Grown
+            </div>
+
+            <div className="dash-stat-value">
+              {trees}
+            </div>
+
+            <div className="dash-stat-description">
+              Virtual trees in your journey
+            </div>
+          </button>
+
+          <button
+            className="dash-stat-card gold"
+            type="button"
             onClick={() => navigate("/rewards")}
-          />
+          >
+            <div className="dash-stat-top">
+              <span className="dash-stat-icon">
+                ⭐
+              </span>
+              <span className="dash-stat-arrow">
+                ↗
+              </span>
+            </div>
 
-          <StatCard
-            icon="🔥"
-            title="Green Streak"
-            value={stats.streak}
-            unit="days"
-            description="Consecutive eco days"
-            accent="fire"
+            <div className="dash-stat-title">
+              Points Earned
+            </div>
+
+            <div className="dash-stat-value">
+              {points}
+            </div>
+
+            <div className="dash-stat-description">
+              Lifetime GreenPulse points
+            </div>
+          </button>
+
+          <button
+            className="dash-stat-card fire"
+            type="button"
             onClick={() => navigate("/challenges")}
-          />
+          >
+            <div className="dash-stat-top">
+              <span className="dash-stat-icon">
+                🔥
+              </span>
+              <span className="dash-stat-arrow">
+                ↗
+              </span>
+            </div>
+
+            <div className="dash-stat-title">
+              Green Streak
+            </div>
+
+            <div className="dash-stat-value">
+              {streak}
+              <small>
+                {streak === 1 ? "day" : "days"}
+              </small>
+            </div>
+
+            <div className="dash-stat-description">
+              Consecutive eco days
+            </div>
+          </button>
         </section>
 
+        {/* CARBON + QUICK ACTIONS */}
         <section className="dash-main-grid">
           <article className="dash-panel dash-carbon-panel">
             <div className="dash-panel-header">
               <div>
-                <span className="dash-section-kicker">IMPACT</span>
+                <span className="dash-section-kicker">
+                  IMPACT
+                </span>
+
                 <h2>Your Carbon Footprint</h2>
               </div>
 
               <div className="dash-periods">
-                {["7D", "30D", "1Y"].map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    className={
-                      activePeriod === period ? "active" : ""
-                    }
-                    onClick={() => setActivePeriod(period)}
-                  >
-                    {period}
-                  </button>
-                ))}
+                {Object.keys(PERIODS).map(
+                  (item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={
+                        period === item
+                          ? "active"
+                          : ""
+                      }
+                      onClick={() =>
+                        setPeriod(item)
+                      }
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
               </div>
             </div>
 
@@ -445,85 +876,88 @@ export default function Dashboard() {
                 <div
                   className="dash-ring-inner"
                   style={{
-                    "--ring-progress": `${footprintScore}%`,
+                    "--ring-progress": `${footprintProgress}%`,
                   }}
                 >
-                  <strong>{footprintScore}%</strong>
+                  <strong>
+                    {footprintProgress}%
+                  </strong>
                   <span>eco progress</span>
                 </div>
               </div>
 
               <div className="dash-chart-area">
                 <div className="dash-chart">
-                  {chartValues.map((value, index) => (
-                    <div className="dash-chart-column" key={index}>
-                      <div
-                        className="dash-chart-bar"
-                        style={{
-                          height: `${value}%`,
-                        }}
-                      >
-                        <span />
-                      </div>
+                  {chartData.map((item, index) => {
+                    const height =
+                      maxChartValue > 0
+                        ? Math.max(
+                            4,
+                            (item.value /
+                              maxChartValue) *
+                              100
+                          )
+                        : 3;
 
-                      <small>
-                        {activePeriod === "1Y"
-                          ? [
-                              "J",
-                              "F",
-                              "M",
-                              "A",
-                              "M",
-                              "J",
-                              "J",
-                              "A",
-                              "S",
-                              "O",
-                              "N",
-                              "D",
-                            ][index]
-                          : activePeriod === "7D"
-                          ? [
-                              "M",
-                              "T",
-                              "W",
-                              "T",
-                              "F",
-                              "S",
-                              "S",
-                            ][index]
-                          : [
-                              "1",
-                              "4",
-                              "7",
-                              "10",
-                              "13",
-                              "16",
-                              "19",
-                              "22",
-                              "25",
-                              "28",
-                            ][index]}
-                      </small>
-                    </div>
-                  ))}
+                    return (
+                      <div
+                        className="dash-chart-column"
+                        key={`${item.date || item.label}-${index}`}
+                        title={
+                          item.value > 0
+                            ? `${item.value.toFixed(
+                                1
+                              )} kg CO₂e`
+                            : "No recorded impact"
+                        }
+                      >
+                        <div className="dash-chart-bar">
+                          <span
+                            style={{
+                              height: `${height}%`,
+                            }}
+                          />
+                        </div>
+
+                        <small>
+                          {item.label}
+                        </small>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="dash-chart-caption">
+                  <span>
+                    {history.length > 0
+                      ? "Based on your recorded activity"
+                      : "Record eco activity to populate your chart"}
+                  </span>
+
+                  <span>
+                    {period === "1Y"
+                      ? "Monthly view"
+                      : "Daily view"}
+                  </span>
                 </div>
               </div>
 
               <div className="dash-carbon-side">
                 <div>
                   <span>Total footprint</span>
-                  <strong>{stats.totalCO2.toFixed(1)} kg</strong>
+                  <strong>
+                    {totalCo2e.toFixed(1)} kg
+                  </strong>
                 </div>
 
                 <div>
                   <span>Completed days</span>
-                  <strong>{stats.completedDays}</strong>
+                  <strong>{completedDays}</strong>
                 </div>
 
                 <div>
                   <span>Calculations</span>
-                  <strong>{stats.calculations}</strong>
+                  <strong>{totalCalculations}</strong>
                 </div>
               </div>
             </div>
@@ -531,12 +965,17 @@ export default function Dashboard() {
 
           <aside className="dash-side-panel">
             <div className="dash-mini-profile">
-              <div className="dash-big-avatar">🌱</div>
+              <div className="dash-big-avatar">
+                🌱
+              </div>
 
               <div>
                 <strong>{username}</strong>
                 <span>
-                  <i /> {level.name}
+                  <i />
+                  {isAdmin
+                    ? "Administrator"
+                    : "Eco Starter"}
                 </span>
               </div>
             </div>
@@ -547,48 +986,70 @@ export default function Dashboard() {
                   <span className="dash-section-kicker">
                     SHORTCUTS
                   </span>
+
                   <h2>Quick Actions</h2>
                 </div>
               </div>
 
-              <QuickAction
-                icon="🧮"
-                title="Calculate Footprint"
-                text="Record today's impact"
-                onClick={() => navigate("/calculator")}
-              />
+              {[
+                [
+                  "🧮",
+                  "Calculate Footprint",
+                  "Record today's impact",
+                  "/calculator",
+                ],
+                [
+                  "🌲",
+                  "View My Forest",
+                  "See your trees grow",
+                  "/forest",
+                ],
+                [
+                  "🎯",
+                  "Challenges",
+                  "Complete eco missions",
+                  "/challenges",
+                ],
+                [
+                  "🏆",
+                  "Check Rewards",
+                  "View points & badges",
+                  "/rewards",
+                ],
+                [
+                  "🧘",
+                  "Focus Session",
+                  "Take a green break",
+                  "/focus",
+                ],
+              ].map(
+                ([icon, title, description, path]) => (
+                  <button
+                    className="dash-quick-action"
+                    type="button"
+                    key={path}
+                    onClick={() => navigate(path)}
+                  >
+                    <span className="dash-action-icon">
+                      {icon}
+                    </span>
 
-              <QuickAction
-                icon="🌲"
-                title="View My Forest"
-                text="See your trees grow"
-                onClick={() => navigate("/forest")}
-              />
+                    <span className="dash-action-copy">
+                      <strong>{title}</strong>
+                      <small>{description}</small>
+                    </span>
 
-              <QuickAction
-                icon="🎯"
-                title="Challenges"
-                text="Complete eco missions"
-                onClick={() => navigate("/challenges")}
-              />
-
-              <QuickAction
-                icon="🏆"
-                title="Check Rewards"
-                text="View points & badges"
-                onClick={() => navigate("/rewards")}
-              />
-
-              <QuickAction
-                icon="🧘"
-                title="Focus Session"
-                text="Take a green break"
-                onClick={() => navigate("/focus")}
-              />
+                    <span className="dash-action-arrow">
+                      →
+                    </span>
+                  </button>
+                )
+              )}
             </div>
           </aside>
         </section>
 
+        {/* ACTIVITY / MISSIONS / REWARDS */}
         <section className="dash-lower-grid">
           <article className="dash-panel dash-weekly">
             <div className="dash-panel-header">
@@ -596,60 +1057,82 @@ export default function Dashboard() {
                 <span className="dash-section-kicker">
                   ACTIVITY
                 </span>
+
                 <h2>Your Green Journey</h2>
               </div>
 
               <button
                 type="button"
-                onClick={() => navigate("/progress")}
+                onClick={() =>
+                  navigate("/progress")
+                }
               >
                 View details →
               </button>
             </div>
 
             <div className="dash-week-bars">
-              {[42, 56, 49, 63, 51, 71, 84].map(
-                (height, index) => (
-                  <div className="dash-week-day" key={index}>
+              {[
+                "Mon",
+                "Tue",
+                "Wed",
+                "Thu",
+                "Fri",
+                "Sat",
+                "Sun",
+              ].map((day, index) => {
+                const recent = chartData.slice(-7);
+                const item = recent[index];
+
+                const maxRecent = Math.max(
+                  ...recent.map(
+                    (entry) => entry.value
+                  ),
+                  0
+                );
+
+                const height =
+                  item && maxRecent > 0
+                    ? Math.max(
+                        6,
+                        (item.value /
+                          maxRecent) *
+                          100
+                      )
+                    : 4;
+
+                return (
+                  <div
+                    className="dash-week-day"
+                    key={day}
+                  >
                     <div className="dash-week-bar-wrap">
-                      <span style={{ height: `${height}%` }} />
+                      <span
+                        style={{
+                          height: `${height}%`,
+                        }}
+                      />
                     </div>
 
-                    <small>
-                      {
-                        [
-                          "Mon",
-                          "Tue",
-                          "Wed",
-                          "Thu",
-                          "Fri",
-                          "Sat",
-                          "Sun",
-                        ][index]
-                      }
-                    </small>
+                    <small>{day}</small>
                   </div>
-                )
-              )}
+                );
+              })}
             </div>
 
             <div className="dash-week-message">
-              <span>
-                {stats.streak > 0 ? "🔥" : "🌱"}
-              </span>
+              <span>🌱</span>
 
               <div>
                 <strong>
-                  {stats.streak > 0
-                    ? "You're on a green streak!"
+                  {streak > 0
+                    ? `${streak}-day green streak!`
                     : "Start your green streak!"}
                 </strong>
 
                 <small>
-                  {stats.streak > 0
-                    ? `${stats.streak} consecutive eco day${
-                        stats.streak === 1 ? "" : "s"
-                      } completed.`
+                  {streak > 0
+                    ? "Keep the momentum alive."
                     : "Complete an eco activity to begin."}
                 </small>
               </div>
@@ -662,12 +1145,15 @@ export default function Dashboard() {
                 <span className="dash-section-kicker">
                   MISSIONS
                 </span>
+
                 <h2>Current Challenges</h2>
               </div>
 
               <button
                 type="button"
-                onClick={() => navigate("/challenges")}
+                onClick={() =>
+                  navigate("/challenges")
+                }
               >
                 View all →
               </button>
@@ -675,7 +1161,9 @@ export default function Dashboard() {
 
             <div className="dash-challenges">
               <div className="dash-challenge">
-                <span className="challenge-icon">💧</span>
+                <span className="challenge-icon">
+                  💧
+                </span>
 
                 <div>
                   <strong>Green Start</strong>
@@ -687,7 +1175,7 @@ export default function Dashboard() {
                     <span
                       style={{
                         width:
-                          stats.completedDays > 0
+                          totalCalculations > 0
                             ? "100%"
                             : "0%",
                       }}
@@ -696,38 +1184,48 @@ export default function Dashboard() {
                 </div>
 
                 <b>
-                  {stats.completedDays > 0 ? "1/1" : "0/1"}
+                  {totalCalculations > 0
+                    ? "1/1"
+                    : "0/1"}
                 </b>
               </div>
 
               <div className="dash-challenge">
-                <span className="challenge-icon">🔥</span>
+                <span className="challenge-icon">
+                  🔥
+                </span>
 
                 <div>
                   <strong>7-Day Warrior</strong>
-                  <small>Build a consistent green streak</small>
+                  <small>
+                    Build a consistent green streak
+                  </small>
 
                   <div className="challenge-progress">
                     <span
                       style={{
                         width: `${Math.min(
                           100,
-                          (stats.streak / 7) * 100
+                          (streak / 7) * 100
                         )}%`,
                       }}
                     />
                   </div>
                 </div>
 
-                <b>{Math.min(stats.streak, 7)}/7</b>
+                <b>{Math.min(streak, 7)}/7</b>
               </div>
 
               <div className="dash-challenge">
-                <span className="challenge-icon">🌳</span>
+                <span className="challenge-icon">
+                  🌳
+                </span>
 
                 <div>
                   <strong>Forest Builder</strong>
-                  <small>Grow your virtual forest</small>
+                  <small>
+                    Grow your virtual forest
+                  </small>
 
                   <div className="challenge-progress">
                     <span
@@ -758,7 +1256,9 @@ export default function Dashboard() {
 
               <button
                 type="button"
-                onClick={() => navigate("/rewards")}
+                onClick={() =>
+                  navigate("/rewards")
+                }
               >
                 View all →
               </button>
@@ -767,65 +1267,85 @@ export default function Dashboard() {
             <div className="dash-reward-list">
               <div
                 className={`dash-reward ${
-                  stats.completedDays >= 1 ? "unlocked" : ""
+                  completedDays >= 1
+                    ? "unlocked"
+                    : ""
                 }`}
               >
                 <span>🌱</span>
 
                 <div>
                   <strong>First Footprint</strong>
-                  <small>Begin your green journey</small>
+                  <small>
+                    Begin your green journey
+                  </small>
                 </div>
 
                 <b>
-                  {stats.completedDays >= 1 ? "✓" : "🔒"}
+                  {completedDays >= 1
+                    ? "✓"
+                    : "🔒"}
                 </b>
               </div>
 
               <div
                 className={`dash-reward ${
-                  stats.completedDays >= 7 ? "unlocked" : ""
+                  completedDays >= 7
+                    ? "unlocked"
+                    : ""
                 }`}
               >
                 <span>🔥</span>
 
                 <div>
                   <strong>Day Explorer</strong>
-                  <small>Complete 7 eco days</small>
+                  <small>
+                    Complete 7 eco days
+                  </small>
                 </div>
 
                 <b>
-                  {stats.completedDays >= 7 ? "✓" : "🔒"}
+                  {completedDays >= 7
+                    ? "✓"
+                    : "🔒"}
                 </b>
               </div>
 
               <div
                 className={`dash-reward ${
-                  stats.points >= 500 ? "unlocked" : ""
+                  points >= 500
+                    ? "unlocked"
+                    : ""
                 }`}
               >
                 <span>⭐</span>
 
                 <div>
                   <strong>Climate Champion</strong>
-                  <small>Reach 500 points</small>
+                  <small>
+                    Reach 500 points
+                  </small>
                 </div>
 
                 <b>
-                  {stats.points >= 500 ? "✓" : "🔒"}
+                  {points >= 500
+                    ? "✓"
+                    : "🔒"}
                 </b>
               </div>
             </div>
           </article>
         </section>
 
+        {/* DIGITAL FOREST */}
         <section
           className="dash-bottom-forest"
           style={{
-            backgroundImage: `linear-gradient(90deg, rgba(0,20,13,.96), rgba(0,20,13,.4)), url("${LEAF_IMAGE}")`,
+            backgroundImage:
+              "linear-gradient(90deg, rgba(0, 20, 13, 0.97), rgba(0, 20, 13, 0.42)), url('https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=1600&q=85')",
           }}
         >
-          <div>
+          <div className="dash-bottom-forest-copy">
             <span>YOUR DIGITAL FOREST</span>
 
             <h2>
@@ -835,15 +1355,17 @@ export default function Dashboard() {
             </h2>
 
             <p>
-              Your sustainable actions aren't just numbers.
-              They're helping your forest come alive.
+              Your sustainable actions aren't just
+              numbers. They're helping your forest come
+              alive.
             </p>
 
             <button
               type="button"
               onClick={() => navigate("/forest")}
             >
-              Enter the Forest <span>🌲 →</span>
+              <span>Enter the Forest</span>
+              <b>🌲 →</b>
             </button>
           </div>
 
@@ -860,6 +1382,17 @@ export default function Dashboard() {
           Grow responsibly. 🌍
         </footer>
       </main>
-    </div>
+
+      {searchOpen && (
+        <button
+          className="dash-search-backdrop"
+          aria-label="Close search"
+          type="button"
+          onClick={() => setSearchOpen(false)}
+        />
+      )}
+    </main>
   );
 }
+
+export default Dashboard;
